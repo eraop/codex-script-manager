@@ -13,6 +13,7 @@ struct ManagedProject: Identifiable {
     let isPinned: Bool
     var tasks: [ScriptTask] = []
     var isScanning = false
+    var commandConfigError: ScriptCatalog.CommandConfigError?
 
     var id: String { directory.path }
     var name: String { displayName ?? (directory.lastPathComponent.isEmpty ? id : directory.lastPathComponent) }
@@ -85,6 +86,7 @@ final class ScriptManager: ObservableObject {
     @Published private(set) var selectedProjectID: String?
     @Published private(set) var selectedTaskIDs: [String: String] = [:]
     @Published private(set) var activeCount: [String: Int] = [:]
+    @Published private var scriptPins: [String: [String]]
     @Published var errorMessage: String?
     @Published var searchQuery = ""
     @Published var language: ScriptManagerLanguage = .initial
@@ -95,6 +97,7 @@ final class ScriptManager: ObservableObject {
     }
 
     private static let manualProjectsKey = "manualProjectPaths"
+    private static let scriptPinsKey = "pinnedProjectScripts"
     private let defaults: UserDefaults
     private let projectCatalog: CodexProjectCatalog
     private var codexFolders: [CodexProjectCatalog.Folder] = []
@@ -118,6 +121,23 @@ final class ScriptManager: ObservableObject {
         self.defaults = defaults
         self.projectCatalog = projectCatalog
         manualFolders = defaults.stringArray(forKey: Self.manualProjectsKey) ?? []
+        scriptPins = defaults.dictionary(forKey: Self.scriptPinsKey) as? [String: [String]] ?? [:]
+    }
+
+    func isScriptPinned(_ task: ScriptTask, in projectID: String) -> Bool {
+        scriptPins[projectID]?.contains(task.id) == true
+    }
+
+    func setScriptPinned(_ pinned: Bool, for task: ScriptTask, in projectID: String) {
+        guard pinned != isScriptPinned(task, in: projectID) else { return }
+        var tasks = scriptPins[projectID] ?? []
+        if pinned {
+            tasks.append(task.id)
+        } else {
+            tasks.removeAll { $0 == task.id }
+        }
+        scriptPins[projectID] = tasks.isEmpty ? nil : tasks
+        defaults.set(scriptPins, forKey: Self.scriptPinsKey)
     }
 
     func synchronizeProjects(force: Bool = false) {
@@ -174,12 +194,14 @@ final class ScriptManager: ObservableObject {
             let available = Self.isDirectory(directory)
             var project = ManagedProject(directory: directory, displayName: name, source: source,
                                          isAvailable: available, isPinned: pinned, tasks: old?.tasks ?? [],
-                                         isScanning: old?.isScanning ?? false)
+                                         isScanning: old?.isScanning ?? false,
+                                         commandConfigError: old?.commandConfigError)
             if available {
                 if old?.isAvailable != true { needsScan.append(id) }
             } else {
                 pendingScans[id] = nil
                 project.isScanning = false
+                project.commandConfigError = nil
                 project.tasks = project.tasks.filter { isRunning($0, in: id) }
             }
             next.append(project)
@@ -191,7 +213,8 @@ final class ScriptManager: ObservableObject {
         for project in projects where activeCount[project.id] != nil && seen.insert(project.id).inserted {
             next.append(ManagedProject(directory: project.directory, displayName: project.displayName, source: .session,
                                        isAvailable: project.isAvailable, isPinned: false,
-                                       tasks: project.tasks, isScanning: project.isScanning))
+                                       tasks: project.tasks, isScanning: project.isScanning,
+                                       commandConfigError: project.commandConfigError))
         }
 
         let removed = Set(previous.keys).subtracting(seen)
@@ -236,21 +259,28 @@ final class ScriptManager: ObservableObject {
         pendingScans[projectID] = scanID
         projects[index].isScanning = true
         scanQueue.addOperation { [weak self] in
-            let tasks = ScriptCatalog.discover(in: directory)
-            DispatchQueue.main.async { self?.finishScan(tasks, projectID: projectID, scanID: scanID) }
+            let discovery = ScriptCatalog.discover(in: directory)
+            DispatchQueue.main.async { self?.finishScan(discovery, projectID: projectID, scanID: scanID) }
         }
     }
 
-    private func finishScan(_ tasks: [ScriptTask], projectID: String, scanID: UUID) {
+    private func finishScan(_ discovery: ScriptCatalog.Discovery, projectID: String, scanID: UUID) {
         guard pendingScans[projectID] == scanID,
               let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
         pendingScans.removeValue(forKey: projectID)
+        let tasks = discovery.tasks
         let discoveredIDs = Set(tasks.map(\.id))
-        let retained = projects[index].tasks.filter { !discoveredIDs.contains($0.id) && isRunning($0, in: projectID) }
+        let retained = projects[index].tasks.compactMap { task -> ScriptTask? in
+            guard !discoveredIDs.contains(task.id), isRunning(task, in: projectID) else { return nil }
+            var retained = task
+            retained.isRetiredCommand = task.configuredCommand != nil
+            return retained
+        }
         let updated = tasks + retained
         var project = projects[index]
         project.tasks = updated
         project.isScanning = false
+        project.commandConfigError = discovery.commandConfigError
         projects[index] = project
         if !updated.contains(where: { $0.id == selectedTaskIDs[projectID] }) {
             selectedTaskIDs[projectID] = updated.first?.id
@@ -268,7 +298,7 @@ final class ScriptManager: ObservableObject {
     }
 
     func start(_ task: ScriptTask, in project: ManagedProject) {
-        guard onShutdown == nil, project.isAvailable else { return }
+        guard onShutdown == nil, project.isAvailable, !task.isRetiredCommand else { return }
         let run = run(for: task, in: project)
         guard !run.status.isActive else { return }
         selectTask(task.id, in: project)
@@ -287,6 +317,7 @@ final class ScriptManager: ObservableObject {
                     ? run.language.text("Stopped with exit code \(code)", "已停止，退出码 \(code)")
                     : run.language.text("Exited with code \(code)", "已退出，退出码 \(code)")
                 run.append("\n[\(outcome)]\n")
+                self.removeRetiredCommand(task.id, in: project.id)
                 self.changeActiveCount(for: project.id, by: -1)
             })
             run.status = .running
@@ -295,6 +326,16 @@ final class ScriptManager: ObservableObject {
             run.status = .failed(nil)
             run.append(run.language.text("[Launch failed] ", "[启动失败] ") + error.localizedDescription + "\n")
         }
+    }
+
+    private func removeRetiredCommand(_ taskID: String, in projectID: String) {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }),
+              let taskIndex = projects[index].tasks.firstIndex(where: { $0.id == taskID && $0.isRetiredCommand }) else {
+            return
+        }
+        projects[index].tasks.remove(at: taskIndex)
+        runs.removeValue(forKey: TaskKey(projectID: projectID, taskID: taskID))
+        if selectedTaskIDs[projectID] == taskID { selectedTaskIDs[projectID] = projects[index].tasks.first?.id }
     }
 
     func stop(_ run: TaskRun) {
@@ -331,7 +372,7 @@ final class ScriptManager: ObservableObject {
             if let error = openDirectory(for: project, destination: request.destination) {
                 return Self.bridgeError(error)
             }
-        case "start", "stop":
+        case "start", "stop", "set_pin":
             guard let project = requestedProject else {
                 return Self.bridgeError(language.text("This project is not open.", "该项目尚未打开。"))
             }
@@ -339,13 +380,19 @@ final class ScriptManager: ObservableObject {
                 return Self.bridgeError(language.text("Script not found in this project. Rescan the project.",
                                                       "该项目中找不到脚本。请重新扫描。"))
             }
-            if request.method == "start" {
+            switch request.method {
+            case "start":
                 guard project.isAvailable else {
                     return Self.bridgeError(language.text("The project folder is unavailable.", "项目目录不可用。"))
                 }
                 start(task, in: project)
-            } else {
+            case "stop":
                 stop(run(for: task, in: project))
+            default:
+                guard let pinned = request.pinned.flatMap(Bool.init) else {
+                    return Self.bridgeError(language.text("Invalid script pin value.", "脚本置顶状态无效。"))
+                }
+                setScriptPinned(pinned, for: task, in: project.id)
             }
         default:
             return Self.bridgeError(language.text("Unknown Script Manager operation.", "未知的脚本管理操作。"))
@@ -359,15 +406,19 @@ final class ScriptManager: ObservableObject {
         } ?? ""
         let tasks = project.map(taskRows(in:)) ?? []
         let projectRows: [[String: Any]] = projects.map { item in
-            [
+            var row: [String: Any] = [
                 "id": item.id, "name": item.name, "path": item.directory.path,
                 "activeCount": activeCount[item.id] ?? 0, "scanning": item.isScanning,
                 "available": item.isAvailable, "source": item.source.rawValue, "pinned": item.isPinned,
                 "tasks": item.id == project?.id ? tasks : taskRows(in: item),
             ]
+            if let error = item.commandConfigError { row["commandConfigError"] = error.message(in: language) }
+            return row
         }
         return ["ok": true, "data": [
             "schemaVersion": 2,
+            "supportsCustomCommands": true,
+            "supportsScriptPins": true,
             "projects": projectRows,
             "selectedProjectId": selectedProjectID as Any? ?? NSNull(),
             "projectId": project?.id as Any? ?? NSNull(),
@@ -384,8 +435,10 @@ final class ScriptManager: ObservableObject {
             var row: [String: Any] = [
                 "id": task.id, "name": task.name, "detail": task.detail, "command": task.command,
                 "packagePath": task.packagePath,
+                "usage": task.usage.bridgeValue,
                 "status": status.label(in: language), "statusKind": status.kind,
                 "active": status.isActive, "stopping": status == .stopping,
+                "pinned": isScriptPinned(task, in: project.id),
             ]
             if let packageName = task.packageName { row["packageName"] = packageName }
             if case .failed(let code) = status { row["exitCode"] = code as Any? ?? NSNull() }
@@ -393,7 +446,7 @@ final class ScriptManager: ObservableObject {
         }
     }
 
-    private func isRunning(_ task: ScriptTask, in projectID: String) -> Bool {
+    func isRunning(_ task: ScriptTask, in projectID: String) -> Bool {
         runs[TaskKey(projectID: projectID, taskID: task.id)]?.status.isActive == true
     }
 

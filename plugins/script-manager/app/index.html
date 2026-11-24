@@ -79,7 +79,7 @@
       align-items: center;
     }
     .masthead, .log-header, .log-footer, .log-context { justify-content: space-between; gap: 12px; }
-    .masthead { flex: none; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .masthead { flex: none; padding-bottom: 12px; }
     .masthead .counts, .project-heading .counts { flex: none; color: var(--muted); font-size: 13px; }
     .masthead .counts { margin-inline-start: clamp(2px, 1vw, 18px); }
     .heading { min-width: 0; gap: 11px; }
@@ -177,16 +177,15 @@
       min-width: 0;
       gap: 8px;
       min-height: 37px;
-      padding: 4px 8px 4px 10px;
+      padding: 4px 8px 4px 13px;
       border: 0;
-      border-inline-start: 3px solid transparent;
       border-radius: 7px;
       background: transparent;
       text-align: start;
     }
     .project-button:hover { background: var(--hover); }
     .project-button:focus-visible { outline-offset: -2px; }
-    .project-button[aria-pressed="true"] { border-inline-start-color: var(--blue); background: var(--selected); font-weight: 700; }
+    .project-button[aria-pressed="true"] { background: var(--selected); font-weight: 700; }
     .project-button[data-missing] { color: var(--muted); }
     .project-button .pin { width: 13px; height: 13px; }
     .project-button .project-active {
@@ -218,6 +217,16 @@
     .path-start { min-width: min(1em, 100%); }
     .path-end { display: flex; justify-content: flex-end; min-width: 0; flex-shrink: .5; overflow: hidden; }
     .path-end > span { flex: none; }
+    .command-config-error {
+      flex: none;
+      margin: 8px 2px 0;
+      padding: 5px 8px;
+      border-inline-start: 2px solid var(--danger);
+      color: var(--danger);
+      overflow-wrap: anywhere;
+      font-size: 12px;
+    }
+    .script-usage-update { flex: none; margin: 8px 2px 0; color: var(--muted); font-size: 12px; }
     .toolbar { flex: none; flex-wrap: wrap; gap: 8px; padding: 9px 2px; }
     .toolbar .search { min-width: 86px; }
     .package-filter { position: relative; min-width: 82px; max-width: min(34%, 190px); }
@@ -297,9 +306,41 @@
     .script-row td:last-child { border-start-end-radius: 6px; border-end-end-radius: 6px; }
     .script-select { display: grid; width: 100%; min-width: 0; padding: 2px 0; border: 0; background: transparent; text-align: start; }
     .script-select:focus-visible { outline-offset: 0; }
+    .script-name-line { display: flex; align-items: center; gap: 3px; min-width: 0; }
+    .script-name-line > :first-child { flex: 1; }
     .script-main { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; gap: 0 5px; }
     .script-name, .script-package { max-width: 100%; }
     .script-name { font-weight: 700; }
+    .script-reason { display: block; margin-top: 1px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+    .script-pin {
+      display: grid;
+      flex: none;
+      place-items: center;
+      width: 21px;
+      height: 21px;
+      padding: 0;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted);
+    }
+    .script-pin:not(:disabled):hover { background: var(--raised); color: var(--text); }
+    .script-pin[aria-pressed="true"] { color: var(--text); }
+    .script-pin .icon { width: 13px; height: 13px; }
+    .script-section th { padding-block: 8px 5px; border-top: 1px solid var(--border); }
+    .script-section-label { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+    .script-section-count { color: var(--muted); font-size: 11px; font-weight: 400; }
+    .script-section-toggle {
+      width: 100%;
+      padding: 2px 0;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      text-align: start;
+    }
+    .script-section-toggle:not(:disabled):hover { background: var(--hover); }
+    .script-section-toggle:disabled { opacity: 1; }
+    .script-section-toggle[aria-expanded="false"] .icon { rotate: -90deg; }
     .script-package, .command { color: var(--muted); font-size: 12px; }
     .command, .terminal-output { font-family: var(--mono); }
     .command { display: block; }
@@ -335,27 +376,48 @@
       border-top: 1px solid var(--border);
       background: var(--raised);
     }
-    .log-tab {
-      display: inline-flex;
+    .log-tab-item {
+      display: flex;
       flex: none;
       align-items: center;
-      gap: 6px;
       max-width: min(230px, 78%);
-      min-height: 32px;
-      padding: 4px 8px;
-      border: 0;
       border-bottom: 2px solid transparent;
       border-radius: 5px 5px 0 0;
-      background: transparent;
       color: var(--muted);
+    }
+    .log-tab-item:hover, .log-tab-item[data-selected] { background: var(--surface); color: var(--text); }
+    .log-tab-item[data-selected] { border-bottom-color: var(--blue); }
+    .log-tab {
+      display: inline-flex;
+      flex: 1;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      min-height: 30px;
+      padding: 4px 3px 4px 8px;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
       text-align: start;
       font-size: 12px;
     }
-    .log-tab:hover, .log-tab[aria-selected="true"] { background: var(--surface); color: var(--text); }
-    .log-tab[aria-selected="true"] { border-bottom-color: var(--blue); }
     .log-tab:focus-visible { outline-offset: -2px; }
     .log-tab .status { flex: none; }
     .log-tab .status::before { width: 7px; height: 7px; }
+    .log-tab-close {
+      display: grid;
+      flex: none;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      margin-inline-end: 3px;
+      padding: 0;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+    }
+    .log-tab-close:not(:disabled):hover { background: var(--hover); }
+    .log-tab-close .icon { width: 15px; height: 15px; }
     .log-panel { display: flex; flex: 1; flex-direction: column; min-height: 0; }
     .log-context { border-top: 1px solid var(--border); }
     .log-title { font-size: 16px; font-weight: 700; }
@@ -373,7 +435,10 @@
       line-height: 1.55;
     }
     .terminal-output[data-empty] { color: var(--muted); white-space: pre-wrap; }
+    .terminal-output .log-error { color: var(--danger); }
     .log-footer { border-radius: 0 0 9px 9px; }
+    .log-footer .line-count { white-space: nowrap; }
+    .log-fix { min-height: 27px; padding: 2px 9px; font-size: 12px; }
     .scroll-switch { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 13px; user-select: none; }
     .scroll-switch input {
       appearance: none;
@@ -461,6 +526,7 @@
     <symbol id="i-add" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M256 112v288m144-144H112"/></symbol>
     <symbol id="i-arrow-down" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M112 268l144 144l144-144M256 392V100"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M112 184l144 144l144-144"/></symbol>
+    <symbol id="i-close" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round"><path d="m368 368-224-224m224 0L144 368"/></symbol>
     <symbol id="i-code" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M160 368L32 256l128-112m192 224l128-112l-128-112M304 96l-96 320"/></symbol>
     <symbol id="i-copy" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><rect x="128" y="128" width="336" height="336" rx="57"/><path d="M383.5 128l.5-24a56.16 56.16 0 0 0-56-56H112a64.19 64.19 0 0 0-64 64v216a56.16 56.16 0 0 0 56 56h24"/></symbol>
     <symbol id="i-folder" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M440 432H72a40 40 0 0 1-40-40V120a40 40 0 0 1 40-40h75.89a40 40 0 0 1 22.19 6.72l27.84 18.56a40 40 0 0 0 22.19 6.72H440a40 40 0 0 1 40 40v240a40 40 0 0 1-40 40zM32 192h448"/></symbol>
@@ -511,6 +577,8 @@
             <div class="scope-info" id="scope-info"></div>
             <div class="scope-controls" id="scope-controls"></div>
           </header>
+          <p class="command-config-error" id="command-config-error" role="alert" hidden></p>
+          <p class="script-usage-update" id="script-usage-update" role="status" hidden></p>
           <div class="toolbar">
             <label class="search">
               <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
@@ -564,7 +632,10 @@
           <pre class="terminal-output" id="log" aria-label="Script logs" tabindex="0" data-empty>Run a script to see its logs here.</pre>
           <div class="log-footer">
             <label class="scroll-switch"><input type="checkbox" role="switch" id="log-auto" checked><span data-text="autoScroll">Auto-scroll</span></label>
-            <span class="line-count" id="log-lines">0 lines</span>
+            <div class="actions">
+              <span class="line-count" id="log-lines">0 lines</span>
+              <button class="button log-fix" id="log-fix" type="button" hidden disabled>AI Fix</button>
+            </div>
           </div>
         </div>
         <span class="sr-only" id="copy-feedback" role="status"></span>
@@ -577,6 +648,14 @@
 
     const toolPrefix = "script_manager";
     const preferenceKey = "script-manager-mcp.selection";
+    const commandConfigPath = ".codex/script-manager.json";
+    const usageMessages = {
+      documentation: ["usageDocumentation", "usageDocumentationSource"],
+      workflow: ["usageWorkflow", "usageWorkflowSource"],
+      script: ["usageScript", "usageScriptSource"],
+      specialized: ["usageSpecialized", "usageSpecializedSource"],
+      noEvidence: ["usageNoEvidence"]
+    };
     const peer = window.parent;
     const requests = new Map();
     const browserTheme = window.matchMedia("(prefers-color-scheme: dark)");
@@ -590,6 +669,25 @@
         packageFilter: "Filter by package",
         allPackages: "All packages",
         rootPackage: "Root",
+        pinnedScripts: "Pinned scripts",
+        commonScripts: "Common scripts",
+        automationScripts: "Automation and specialized scripts",
+        unclassifiedScripts: "Needs review",
+        usageUnavailableScripts: "Scripts with no usage data",
+        pinScript: "Pin {value}",
+        unpinScript: "Unpin {value}",
+        usageUpdate: "After running scripts finish, quit and reopen Script Manager to see usage groups and pin scripts.",
+        usageDocumentation: "Mentioned in project documentation",
+        usageDocumentationSource: "Mentioned in {value}",
+        usageWorkflow: "Used by an automation workflow",
+        usageWorkflowSource: "Used by workflow {value}",
+        usageScript: "Called by another script",
+        usageScriptSource: "Called by {value}",
+        usageSpecialized: "Specialized task",
+        usageSpecializedSource: "Specialized task ({value})",
+        usageNoEvidence: "No usage references found",
+        usageUnspecified: "No source details available",
+        usageUnavailable: "Usage classification unavailable",
         pinned: "Pinned project",
         script: "Script",
         command: "Command",
@@ -605,9 +703,15 @@
         logs: "Logs",
         scriptLogs: "Script logs",
         logTabs: "Script runs",
+        closeLogTab: "Close log for {value}",
+        stopAndCloseLogTab: "Stop script and close log for {value}",
         copyLogs: "Copy logs",
         copied: "Logs copied",
         copyFailed: "Could not copy logs.",
+        aiFix: "AI Fix",
+        aiFixTitle: "Open a Codex draft to investigate this error",
+        aiFixOpening: "Opening…",
+        aiFixFailed: "Could not open the Codex repair draft.",
         jumpToEnd: "Jump to end",
         autoScroll: "Auto-scroll",
         oneLine: "{value} line",
@@ -629,7 +733,8 @@
         rescan: "Rescan",
         scanning: "Scanning…",
         scanningFiles: "Scanning project files…",
-        noScripts: "No runnable Node.js or Spring Boot scripts found.",
+        noScripts: "No scripts found. Add commands in {value}, then select Rescan.",
+        noScriptsLegacy: "No scripts found. After running scripts finish, quit and reopen Script Manager to load commands from {value}.",
         noProjects: "No matching projects.",
         noMatches: "No scripts match the filters.",
         noActive: "No active scripts.",
@@ -663,6 +768,25 @@
         packageFilter: "按包筛选",
         allPackages: "全部包",
         rootPackage: "根目录",
+        pinnedScripts: "已置顶脚本",
+        commonScripts: "常用脚本",
+        automationScripts: "自动化与专项脚本",
+        unclassifiedScripts: "待确认",
+        usageUnavailableScripts: "暂无用法信息的脚本",
+        pinScript: "置顶 {value}",
+        unpinScript: "取消置顶 {value}",
+        usageUpdate: "等运行中的脚本结束后，退出并重新打开脚本管理，即可查看用法分组和置顶脚本。",
+        usageDocumentation: "项目文档中有提及",
+        usageDocumentationSource: "{value} 中有提及",
+        usageWorkflow: "自动化工作流会运行此脚本",
+        usageWorkflowSource: "工作流 {value} 会运行此脚本",
+        usageScript: "其他脚本会调用此脚本",
+        usageScriptSource: "{value} 会调用此脚本",
+        usageSpecialized: "专项任务",
+        usageSpecializedSource: "专项任务（{value}）",
+        usageNoEvidence: "未找到用法引用",
+        usageUnspecified: "暂无来源详情",
+        usageUnavailable: "暂无用法分类",
         pinned: "已置顶",
         script: "脚本",
         command: "命令",
@@ -678,9 +802,15 @@
         logs: "日志",
         scriptLogs: "脚本日志",
         logTabs: "脚本运行记录",
+        closeLogTab: "关闭 {value} 的日志",
+        stopAndCloseLogTab: "停止脚本并关闭 {value} 的日志",
         copyLogs: "复制日志",
         copied: "日志已复制",
         copyFailed: "无法复制日志。",
+        aiFix: "AI 修复",
+        aiFixTitle: "在 Codex 中打开草稿来排查此错误",
+        aiFixOpening: "正在打开…",
+        aiFixFailed: "无法打开 Codex 修复草稿。",
         jumpToEnd: "跳到末尾",
         autoScroll: "自动滚动",
         oneLine: "{value} 行",
@@ -702,7 +832,8 @@
         rescan: "重新扫描",
         scanning: "扫描中…",
         scanningFiles: "正在扫描项目文件…",
-        noScripts: "未找到可运行的 Node.js 或 Spring Boot 脚本。",
+        noScripts: "未找到脚本。请在 {value} 中添加命令，然后点「重新扫描」。",
+        noScriptsLegacy: "未找到脚本。等运行中的脚本结束后，退出并重新打开脚本管理，即可读取 {value} 中的命令。",
         noProjects: "没有符合条件的项目。",
         noMatches: "没有符合筛选条件的脚本。",
         noActive: "没有运行中的脚本。",
@@ -731,10 +862,10 @@
     const ids = [
       "app", "add-project", "scan", "error", "error-text", "retry", "welcome",
       "welcome-title", "welcome-text", "dashboard", "counts", "project-count",
-      "project-search", "project-list", "scope-info", "scope-controls", "script-search",
+      "project-search", "project-list", "scope-info", "scope-controls", "command-config-error", "script-usage-update", "script-search",
       "filters", "filter-all", "filter-active", "package-filter", "script-list", "script-rows",
       "log", "log-tabs", "log-panel", "log-context", "log-title", "log-status", "log-lines", "log-auto",
-      "log-copy", "log-bottom", "copy-feedback"
+      "log-copy", "log-bottom", "copy-feedback", "log-fix"
     ];
     const ui = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
     const brandIcons = document.querySelectorAll("[data-brand-icon]");
@@ -745,6 +876,7 @@
       projectId: null,
       logSelection: null,
       logOutput: null,
+      dismissedLogs: new Map(),
       remembered: readPreference(),
       revision: 0,
       action: null,
@@ -756,8 +888,11 @@
       scriptQuery: "",
       packageFilter: "",
       activeOnly: false,
+      expandedUnclassified: new Set(),
+      pinFocus: null,
       menuProjectId: null,
-      copyTimer: 0
+      copyTimer: 0,
+      fixPending: false
     };
     let nextId = 0;
     let origin;
@@ -773,6 +908,7 @@
     let lastLogTabs;
     let lastLogId;
     let lastLogText;
+    let lastLogErrors;
 
     function t(key, value) {
       return messages[locale][key].replace("{value}", () => String(value));
@@ -980,9 +1116,38 @@
       return state.action?.name === "start" && matchesRun(state.action.args, project, task);
     }
 
+    function logKey(projectId, taskId) {
+      return JSON.stringify([projectId, taskId]);
+    }
+
+    function dismissLog(data, { projectId, taskId }) {
+      const project = data.projects.find(({ id }) => id === projectId);
+      const task = project && projectTasks(data, project).find(({ id }) => id === taskId);
+      state.dismissedLogs.set(logKey(projectId, taskId), task && taskIsRunning(task) ? taskKind(task) : "inactive");
+    }
+
+    function reconcileDismissedLogs(data) {
+      if (!state.dismissedLogs.size) return;
+      for (const project of data.projects) {
+        for (const task of projectTasks(data, project)) {
+          const key = logKey(project.id, task.id);
+          const previous = state.dismissedLogs.get(key);
+          if (!previous) continue;
+          const kind = taskKind(task);
+          // A stopped or stopping run can only become active again after a restart.
+          if ((previous === "inactive" && taskIsRunning(task)) || (previous === "stopping" && kind === "active")) {
+            state.dismissedLogs.delete(key);
+          } else {
+            state.dismissedLogs.set(key, taskIsRunning(task) ? kind : "inactive");
+          }
+        }
+      }
+    }
+
     function runsInSnapshot(data) {
       return data.projects.flatMap((project) => projectTasks(data, project)
-        .filter((task) => taskHasRun(task) || pendingStart(project, task))
+        .filter((task) => !state.dismissedLogs.has(logKey(project.id, task.id))
+          && (taskHasRun(task) || pendingStart(project, task)))
         .map((task) => ({ project, task })));
     }
 
@@ -999,6 +1164,7 @@
     function adoptSnapshot(next) {
       const previous = state.snapshot;
       state.snapshot = next;
+      reconcileDismissedLogs(next);
       if (!next.projects.length) {
         setProjectSelection(null);
         setLogSelection();
@@ -1018,7 +1184,11 @@
 
       const selected = state.logSelection;
       if (selected && selected.projectId === next.projectId && selected.taskId === next.selectedTaskId) {
-        state.logOutput = { ...selected, text: typeof next.log === "string" ? next.log : "" };
+        state.logOutput = {
+          ...selected,
+          text: typeof next.log === "string" ? next.log : "",
+          errors: Array.isArray(next.logErrorLines) ? next.logErrorLines : []
+        };
       }
     }
 
@@ -1044,7 +1214,8 @@
         if (state.status === "closed") return;
         const next = parseSnapshot(response, requestLocale);
         state.transportError = null;
-        if (revision === state.revision) adoptSnapshot(next);
+        if (action?.closeLog) dismissLog(next, action.args);
+        if (revision === state.revision || action?.closeLog || action?.name === "set_pin") adoptSnapshot(next);
       } catch (error) {
         if (state.status !== "closed") {
           if (action) state.actionError = error;
@@ -1090,17 +1261,35 @@
     }
 
     function chooseLog(projectId, taskId) {
+      state.dismissedLogs.delete(logKey(projectId, taskId));
       setLogSelection(projectId, taskId);
       state.actionError = null;
       render();
       schedule(0);
     }
 
-    function queueAction(name, args = {}) {
-      if (state.status !== "ready" || state.action || state.snapshot?.pickPending) return;
+    function canQueueAction() {
+      return state.status === "ready" && !state.action && !state.snapshot?.pickPending;
+    }
+
+    function closeLog(project, task) {
+      const args = { projectId: project.id, taskId: task.id };
+      if (taskIsRunning(task) || pendingStart(project, task)) {
+        queueAction("stop", args, { closeLog: true });
+      } else if (state.snapshot) {
+        dismissLog(state.snapshot, args);
+        reconcileLogSelection(state.snapshot);
+        render();
+        schedule(0);
+      }
+    }
+
+    function queueAction(name, args = {}, { closeLog = false } = {}) {
+      if (!canQueueAction()) return;
       state.actionError = null;
-      state.action = { name, args };
-      if (name === "start" || name === "stop") setLogSelection(args.projectId, args.taskId);
+      state.action = { name, args, closeLog };
+      if (name === "start") state.dismissedLogs.delete(logKey(args.projectId, args.taskId));
+      if (!closeLog && (name === "start" || name === "stop")) setLogSelection(args.projectId, args.taskId);
       render();
       schedule(0);
     }
@@ -1156,7 +1345,41 @@
       return { path, name: task.packageName || path.split("/").at(-1) || t("rootPackage") };
     }
 
-    function scriptRow(project, task, group, waiting) {
+    function taskUsage(task) {
+      const { category, evidence } = task.usage ?? {};
+      if (!["common", "automation", "unclassified"].includes(category)) {
+        return { category: "unavailable", reasons: [t("usageUnavailable")] };
+      }
+      const reasons = [];
+      if (Array.isArray(evidence)) {
+        for (const item of evidence) {
+          if (!Object.hasOwn(usageMessages, item?.kind)) continue;
+          const [summary, withSource] = usageMessages[item.kind];
+          const source = typeof item.source === "string" ? item.source.trim() : "";
+          reasons.push(source && withSource ? t(withSource, source) : t(summary));
+        }
+      }
+      if (!reasons.length) reasons.push(t(category === "unclassified" ? "usageNoEvidence" : "usageUnspecified"));
+      return { category, reasons };
+    }
+
+    function scriptPin(project, task, title, waiting, supported) {
+      const pinned = task.pinned === true;
+      const label = t(pinned ? "unpinScript" : "pinScript", title);
+      const pin = button("script-pin", "", ["pin-script", project.id, task.id], () => {
+        if (document.activeElement === pin) state.pinFocus = pin.dataset.focusKey;
+        queueAction("set_pin", { projectId: project.id, taskId: task.id, pinned: String(!pinned) });
+      });
+      pin.setAttribute("aria-label", label);
+      pin.setAttribute("aria-pressed", String(pinned));
+      pin.title = supported ? label : t("usageUpdate");
+      if (!supported) pin.setAttribute("aria-describedby", "script-usage-update");
+      pin.disabled = waiting || !supported;
+      pin.append(icon("pin"));
+      return pin;
+    }
+
+    function scriptRow(project, { task, group, usage }, waiting, pinSupported) {
       const row = node("tr", "script-row");
       const name = node("span", "script-main");
       name.append(node("span", "script-name truncate", task.name));
@@ -1164,20 +1387,25 @@
       if (group.path) name.append(" ", node("span", "script-package truncate", "(" + group.name + ")"));
 
       const nameCell = node("td");
+      const nameLine = node("div", "script-name-line");
       if (taskHasRun(task) || pendingStart(project, task)) {
         const select = button("script-select", "", ["log", project.id, task.id], () => chooseLog(project.id, task.id));
         select.setAttribute("aria-pressed", "false");
         select.title = title;
         select.append(name);
-        nameCell.append(select);
+        nameLine.append(select);
         row.setAttribute("data-loggable", "");
         row.addEventListener("click", (event) => {
           if (!event.target.closest("button")) chooseLog(project.id, task.id);
         });
       } else {
         name.title = title;
-        nameCell.append(name);
+        nameLine.append(name);
       }
+      nameLine.append(scriptPin(project, task, title, waiting, pinSupported));
+      const reason = node("span", "script-reason", usage.reasons[0]);
+      if (usage.reasons.length > 1) reason.title = usage.reasons.join(" · ");
+      nameCell.append(nameLine, reason);
 
       const commandCell = node("td");
       const command = node("code", "command truncate", task.command);
@@ -1299,6 +1527,11 @@
     }
 
     function renderScope(project, waiting) {
+      const configError = typeof project.commandConfigError === "string" ? project.commandConfigError.trim() : "";
+      const alert = ui["command-config-error"];
+      alert.hidden = !configError;
+      setText(alert, configError);
+
       const signature = JSON.stringify([
         locale, project.id, project.name, project.path, project.displayPath, project.available,
         state.menuProjectId, waiting
@@ -1350,23 +1583,87 @@
       lastSelectedScript?.setAttribute("aria-pressed", "true");
     }
 
+    function scriptSectionHeading(project, label, count, disclosure) {
+      const row = node("tr", "script-section");
+      const cell = node("th");
+      cell.colSpan = 4;
+      const caption = node("span", "script-section-label");
+      caption.append(node("span", "", t(label)), node("span", "script-section-count", new Intl.NumberFormat(locale).format(count)));
+      if (disclosure) {
+        const toggle = button("script-section-toggle", "", ["unclassified", project.id], () => {
+          if (state.expandedUnclassified.has(project.id)) state.expandedUnclassified.delete(project.id);
+          else state.expandedUnclassified.add(project.id);
+          render();
+        });
+        toggle.setAttribute("aria-expanded", String(disclosure.expanded));
+        toggle.disabled = disclosure.revealed;
+        caption.prepend(icon("chevron"));
+        toggle.append(caption);
+        cell.append(toggle);
+      } else {
+        cell.append(caption);
+      }
+      row.append(cell);
+      return row;
+    }
+
+    function groupedScriptRows(project, entries, waiting, pinSupported, revealUnclassified) {
+      const groups = {
+        pinned: [],
+        common: [],
+        automation: [],
+        unavailable: [],
+        unclassified: []
+      };
+      for (const entry of entries) groups[entry.task.pinned === true ? "pinned" : entry.usage.category].push(entry);
+      const sections = [
+        ["pinned", "pinnedScripts"],
+        ["common", "commonScripts"],
+        ["automation", "automationScripts"],
+        ["unavailable", "usageUnavailableScripts"],
+        ["unclassified", "unclassifiedScripts"]
+      ];
+
+      const rows = [];
+      for (const [category, label] of sections) {
+        const group = groups[category];
+        if (!group.length) continue;
+        const revealed = revealUnclassified || group.every(({ task }) => taskIsRunning(task));
+        const expanded = revealed || state.expandedUnclassified.has(project.id);
+        const disclosure = category === "unclassified" ? { expanded, revealed } : null;
+        rows.push(scriptSectionHeading(project, label, group.length, disclosure));
+        const shown = !disclosure || expanded ? group : group.filter(({ task }) => taskIsRunning(task));
+        for (const entry of shown) rows.push(scriptRow(project, entry, waiting, pinSupported));
+      }
+      return rows;
+    }
+
     function renderScripts(data, project, waiting) {
-      const entries = projectTasks(data, project).map((task) => ({ task, group: taskPackage(task) }));
+      const entries = projectTasks(data, project).map((task) => ({
+        task, group: taskPackage(task), usage: taskUsage(task)
+      }));
       renderPackages(entries);
 
       const query = state.scriptQuery.trim().toLocaleLowerCase(locale);
-      const visible = entries.filter(({ task, group }) => (
+      const revealUnclassified = Boolean(query || state.activeOnly || state.packageFilter);
+      const pinSupported = data.supportsScriptPins === true;
+      const update = ui["script-usage-update"];
+      update.hidden = pinSupported;
+      setText(update, pinSupported ? "" : t("usageUpdate"));
+      const visible = entries.filter(({ task, group, usage }) => (
         (!state.activeOnly || taskIsRunning(task)) &&
         (!state.packageFilter || state.packageFilter === packageChoice(group)) &&
-        textMatches(query, task.name, task.command, task.detail, group.name, group.path)
+        textMatches(query, task.name, task.command, task.detail, group.name, group.path, ...usage.reasons)
       ));
       ui["filter-all"].setAttribute("aria-pressed", String(!state.activeOnly));
       ui["filter-active"].setAttribute("aria-pressed", String(state.activeOnly));
+      const noScriptsMessage = data.supportsCustomCommands === true ? "noScripts" : "noScriptsLegacy";
       const emptyMessage = project.available === false ? "projectUnavailable"
-        : project.scanning && !entries.length ? "scanningFiles"
-        : query || state.packageFilter ? "noMatches" : state.activeOnly ? "noActive" : "noScripts";
+        : !entries.length ? (project.scanning ? "scanningFiles" : noScriptsMessage)
+        : query || state.packageFilter ? "noMatches" : "noActive";
       const signature = JSON.stringify([
-        locale, project.id, project.available, waiting, state.action, emptyMessage,
+        locale, project.id, project.available, waiting, state.action, emptyMessage, pinSupported,
+        revealUnclassified, state.expandedUnclassified.has(project.id),
         visible.map(({ task }) => task)
       ]);
 
@@ -1378,11 +1675,12 @@
       const list = ui["script-list"];
       const table = ui["script-rows"];
       const scrollPosition = list.scrollTop;
-      const focus = focusedKey(table);
-      const rows = visible.map(({ task, group }) => scriptRow(project, task, group, waiting));
+      const focus = focusedKey(table) ?? (document.activeElement === document.body ? state.pinFocus : null);
+      if (!waiting) state.pinFocus = null;
+      const rows = groupedScriptRows(project, visible, waiting, pinSupported, revealUnclassified);
       if (!rows.length) {
         const row = node("tr");
-        const cell = node("td", "empty", t(emptyMessage));
+        const cell = node("td", "empty", t(emptyMessage, commandConfigPath));
         cell.colSpan = 4;
         row.append(cell);
         rows.push(row);
@@ -1393,8 +1691,10 @@
       if (focus) {
         const [kind, projectId, taskId] = JSON.parse(focus);
         const next = findFocus(table, focus)
-          || (kind === "run" ? findFocus(table, JSON.stringify(["log", projectId, taskId])) : null);
-        next?.focus({ preventScroll: true });
+          || (kind === "run" ? findFocus(table, JSON.stringify(["log", projectId, taskId])) : null)
+          || (kind === "pin-script" && !waiting && project.id === projectId
+            ? findFocus(table, JSON.stringify(["unclassified", projectId])) : null);
+        next?.focus({ preventScroll: kind !== "pin-script" });
       }
     }
 
@@ -1415,23 +1715,32 @@
       const list = ui["log-tabs"];
       const panel = ui["log-panel"];
       const titles = new Map();
+      const actionAvailable = canQueueAction();
       const tabs = runs.map(({ project, task }) => {
         const group = taskPackage(task);
         const title = [project.name, group.path ? group.name : null, task.name].filter(Boolean).join(" / ");
         const location = [project.displayPath || project.path, group.path].filter(Boolean).join("/");
+        const starting = pendingStart(project, task);
         titles.set(title, (titles.get(title) ?? 0) + 1);
-        return { project, task, title, location, kind: pendingStart(project, task) ? "active" : taskKind(task) };
+        return {
+          project, task, title, location,
+          kind: starting ? "active" : taskKind(task),
+          running: starting || taskIsRunning(task)
+        };
       });
       const active = tabs.findIndex(({ project, task }) => matchesRun(state.logSelection, project, task));
-      const signature = JSON.stringify(tabs.map(({ project, task, title, location, kind }, index) =>
-        [project.id, task.id, title, location, kind, index === active]));
+      const signature = JSON.stringify([locale, actionAvailable, tabs.map(({ project, task, title, location, kind }, index) =>
+        [project.id, task.id, title, location, kind, index === active])]);
       if (lastLogTabs !== signature) {
         lastLogTabs = signature;
         const previousKey = list.querySelector('[aria-selected="true"]')?.dataset.focusKey;
         const focus = focusedKey(list);
         const scrollPosition = list.scrollLeft;
-        const elements = tabs.map(({ project, task, title, location, kind }, index) => {
+        const elements = tabs.map(({ project, task, title, location, kind, running }, index) => {
           const selected = index === active;
+          const item = node("div", "log-tab-item");
+          item.setAttribute("role", "presentation");
+          item.toggleAttribute("data-selected", selected);
           const control = button("log-tab", "", ["log-tab", project.id, task.id], () => chooseLog(project.id, task.id));
           control.id = "script-log-tab-" + index;
           control.title = location ? title + " · " + location : title;
@@ -1444,20 +1753,31 @@
           indicator.setAttribute("aria-hidden", "true");
           const label = titles.get(title) > 1 && location ? title + " · " + location : title;
           control.append(indicator, node("span", "truncate", label));
-          return control;
+
+          const close = button("log-tab-close", "", ["close-log", project.id, task.id], () => closeLog(project, task));
+          const closeLabel = t(running ? "stopAndCloseLogTab" : "closeLogTab", label);
+          close.title = closeLabel;
+          close.setAttribute("aria-label", closeLabel);
+          close.setAttribute("aria-keyshortcuts", "Delete");
+          close.tabIndex = selected ? 0 : -1;
+          close.disabled = running && !actionAvailable;
+          close.append(icon("close"));
+          item.append(control, close);
+          return { item, control };
         });
+        const selectedTab = elements[active]?.control;
         list.hidden = !elements.length;
-        list.replaceChildren(...elements);
+        list.replaceChildren(...elements.map(({ item }) => item));
         list.scrollLeft = scrollPosition;
-        if (active >= 0) {
+        if (selectedTab) {
           panel.setAttribute("role", "tabpanel");
-          panel.setAttribute("aria-labelledby", elements[active].id);
+          panel.setAttribute("aria-labelledby", selectedTab.id);
         } else {
           panel.removeAttribute("role");
           panel.removeAttribute("aria-labelledby");
         }
-        if (focus) (findFocus(list, focus) ?? elements[active])?.focus({ preventScroll: true });
-        if (elements[active]?.dataset.focusKey !== previousKey) revealLogTab(elements[active]);
+        if (focus) (findFocus(list, focus) ?? selectedTab ?? ui.log).focus({ preventScroll: true });
+        if (selectedTab?.dataset.focusKey !== previousKey) revealLogTab(selectedTab?.parentElement);
       }
       return tabs[active];
     }
@@ -1467,6 +1787,11 @@
       const tabs = Array.from(list.querySelectorAll('[role="tab"]'));
       const current = tabs.indexOf(event.target);
       if (current < 0) return;
+      if (event.key === "Delete") {
+        event.preventDefault();
+        tabs[current].parentElement.querySelector(".log-tab-close").click();
+        return;
+      }
       const next = {
         ArrowLeft: (current + tabs.length - 1) % tabs.length,
         ArrowRight: (current + 1) % tabs.length,
@@ -1480,19 +1805,40 @@
       target.click();
       const active = findFocus(list, key);
       active?.focus({ preventScroll: true });
-      revealLogTab(active);
+      revealLogTab(active?.parentElement);
     }
 
     function focusedLogOutput() {
       const { logOutput, logSelection } = state;
       return logOutput && logSelection?.projectId === logOutput.projectId && logSelection.taskId === logOutput.taskId
-        ? logOutput.text : undefined;
+        ? logOutput : undefined;
+    }
+
+    function renderLogText(text, errors) {
+      if (!errors.length) {
+        ui.log.textContent = text;
+        return;
+      }
+      const lines = text.split("\n");
+      const parts = [];
+      let start = 0;
+      for (const index of errors) {
+        if (!Number.isInteger(index) || index < start || index >= lines.length) continue;
+        if (start < index) parts.push(lines.slice(start, index).join("\n") + "\n");
+        parts.push(node("span", "log-error", lines[index]));
+        if (index < lines.length - 1) parts.push("\n");
+        start = index + 1;
+      }
+      if (start < lines.length) parts.push(lines.slice(start).join("\n"));
+      ui.log.replaceChildren(...parts);
     }
 
     function renderLog(data) {
       const run = renderLogTabs(runsInSnapshot(data));
       const output = run ? focusedLogOutput() : undefined;
-      const log = output || "";
+      const log = output?.text || "";
+      const errors = log ? output.errors : [];
+      const errorSignature = errors.join(",");
       const text = log || t(!run ? "noRuns" : output === undefined ? "loadingLogs" : "noLogs");
       const logId = run ? JSON.stringify([run.project.id, run.task.id]) : "";
       const switched = logId !== lastLogId;
@@ -1504,18 +1850,24 @@
         setText(ui["log-status"], pendingStart(project, task) ? t("starting") : taskStatus(task));
         ui["log-status"].dataset.kind = kind;
       }
-      if (switched || text !== lastLogText) {
-        setText(ui.log, text);
+      if (switched || text !== lastLogText || errorSignature !== lastLogErrors) {
+        renderLogText(text, errors);
         if (ui["log-auto"].checked) scrollToEnd();
         else if (switched) ui.log.scrollTop = 0;
         lastLogId = logId;
         lastLogText = text;
+        lastLogErrors = errorSignature;
       }
       ui.log.toggleAttribute("data-empty", !log);
       ui["log-bottom"].disabled = !log;
       ui["log-copy"].disabled = !log;
       const count = log ? log.replace(/\n$/, "").split("\n").length : 0;
       setText(ui["log-lines"], quantity(count, "oneLine", "lineCount"));
+      const fix = ui["log-fix"];
+      fix.hidden = !run || (!errors.length && run.kind !== "failed");
+      fix.disabled = fix.hidden || state.fixPending || state.status !== "ready";
+      fix.title = t("aiFixTitle");
+      setText(fix, t(state.fixPending ? "aiFixOpening" : "aiFix"));
     }
 
     function updateCopyFeedback(result) {
@@ -1543,7 +1895,7 @@
     }
 
     async function copyLogs() {
-      const log = focusedLogOutput();
+      const log = focusedLogOutput()?.text;
       if (!log) return;
       let copied = false;
       try {
@@ -1566,6 +1918,30 @@
       }
       clearTimeout(state.copyTimer);
       state.copyTimer = setTimeout(() => updateCopyFeedback(""), 1600);
+    }
+
+    async function openAiFix() {
+      const selection = state.logSelection;
+      if (!selection || ui["log-fix"].disabled) return;
+      const requestLocale = locale;
+      state.fixPending = true;
+      if (state.actionError?.key === "aiFixFailed") state.actionError = null;
+      render();
+      try {
+        const result = await request("tools/call", {
+          name: toolPrefix + "_ai_fix",
+          arguments: { ...selection, locale: requestLocale }
+        });
+        if (result?.isError || result?.structuredContent?.opened !== true) {
+          const detail = result?.isError ? result.content?.find((part) => part.type === "text")?.text : "";
+          throw new LocalizedError("aiFixFailed", detail, requestLocale);
+        }
+      } catch (error) {
+        if (state.status !== "closed") state.actionError = error;
+      } finally {
+        state.fixPending = false;
+        if (state.status !== "closed") render();
+      }
     }
 
     function render() {
@@ -1673,6 +2049,7 @@
     });
     ui["log-tabs"].addEventListener("keydown", navigateLogTabs);
     ui["log-copy"].addEventListener("click", copyLogs);
+    ui["log-fix"].addEventListener("click", openAiFix);
     ui["log-bottom"].addEventListener("click", scrollToEnd);
     ui["log-auto"].addEventListener("change", () => {
       if (ui["log-auto"].checked) scrollToEnd();

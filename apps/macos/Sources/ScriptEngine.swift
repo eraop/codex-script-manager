@@ -2,6 +2,11 @@ import Darwin
 import Foundation
 
 struct ScriptTask: Identifiable {
+    struct ConfiguredCommand {
+        let text: String
+        let projectRoot: String
+    }
+
     let id: String
     let name: String
     let directory: URL
@@ -11,9 +16,14 @@ struct ScriptTask: Identifiable {
     let packagePath: String
     let packageName: String?
     var gradleDebug = false
+    var configuredCommand: ConfiguredCommand?
+    var isRetiredCommand = false
+    var scriptDefinition: String?
+    var usage = ScriptUsage.unclassified
 
     var command: String {
-        ([executable] + arguments).map(Self.shellQuoted).joined(separator: " ")
+        if let configuredCommand { return configuredCommand.text }
+        return ([executable] + arguments).map(Self.shellQuoted).joined(separator: " ")
             + (gradleDebug ? " --init-script <JDWP>" : "")
     }
 
@@ -26,7 +36,60 @@ struct ScriptTask: Identifiable {
 }
 
 enum ScriptCatalog {
+    struct Discovery {
+        let tasks: [ScriptTask]
+        let commandConfigError: CommandConfigError?
+    }
+
+    enum CommandConfigError {
+        case unreadable
+        case tooLarge
+        case invalidFormat
+        case invalidName(Int)
+        case duplicateName(Int)
+        case invalidCommand(Int)
+        case invalidDirectory(Int)
+
+        func message(in language: ScriptManagerLanguage) -> String {
+            let file = ".codex/script-manager.json"
+            switch self {
+            case .unreadable:
+                return language.text("Could not read \(file) as a project file.", "无法读取项目中的 \(file)。")
+            case .tooLarge:
+                return language.text("\(file) must be 256 KiB or smaller.", "\(file) 不能超过 256 KiB。")
+            case .invalidFormat:
+                return language.text(
+                    "\(file) must contain a commands array with a name, command, and optional cwd for each entry.",
+                    "\(file) 必须包含 commands 数组，每项填写 name、command，以及可选的 cwd。"
+                )
+            case .invalidName(let index):
+                return language.text("\(file), command \(index): name must be 1–256 characters with no control characters.",
+                                     "\(file) 的第 \(index) 条命令名称须为 1 到 256 个字符，且不能包含控制字符。")
+            case .duplicateName(let index):
+                return language.text("\(file), command \(index): name is already in use.",
+                                     "\(file) 的第 \(index) 条命令使用了重复的名称。")
+            case .invalidCommand(let index):
+                return language.text("\(file), command \(index): command must be nonempty and contain no NUL characters.",
+                                     "\(file) 的第 \(index) 条命令不能为空或包含 NUL 字符。")
+            case .invalidDirectory(let index):
+                return language.text("\(file), command \(index): cwd must be a relative path to a folder inside the project.",
+                                     "\(file) 的第 \(index) 条命令需要使用项目内目录的相对路径作为 cwd。")
+            }
+        }
+    }
+
+    private struct CommandConfig: Decodable {
+        struct Entry: Decodable {
+            let name: String
+            let command: String
+            let cwd: String?
+        }
+
+        let commands: [Entry]
+    }
+
     private static let fileManager = FileManager.default
+    private static let commandConfigSizeLimit = 256 * 1024
     private static let skippedDirectories: Set<String> = [
         "node_modules", "build", "dist", "target", "out", "coverage", "vendor", "Pods",
         "fixtures", "__fixtures__", "testdata",
@@ -34,13 +97,89 @@ enum ScriptCatalog {
     fileprivate static let debugOption =
         "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5005"
 
-    static func discover(in project: URL) -> [ScriptTask] {
+    static func discover(in project: URL) -> Discovery {
         let root = project.standardizedFileURL.resolvingSymlinksInPath()
-        return projectDirectories(in: root).flatMap { directory, packagePath in
+        let automatic = projectDirectories(in: root).flatMap { directory, packagePath in
             npmTasks(in: directory, root: root, packagePath: packagePath)
                 + mavenTasks(in: directory, root: root, packagePath: packagePath)
                 + gradleTasks(in: directory, root: root, packagePath: packagePath)
         }
+        let configured = configuredCommands(in: root)
+        var classifier = ScriptUsage.Classifier(tasks: automatic + configured.tasks)
+        return Discovery(tasks: classifier.classify(in: root), commandConfigError: configured.commandConfigError)
+    }
+
+    private static func configuredCommands(in root: URL) -> Discovery {
+        func invalid(_ error: CommandConfigError) -> Discovery { Discovery(tasks: [], commandConfigError: error) }
+        let config = root.appendingPathComponent(".codex/script-manager.json")
+        do {
+            _ = try fileManager.attributesOfItem(atPath: config.path)
+        } catch let error as CocoaError where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile {
+            return Discovery(tasks: [], commandConfigError: nil)
+        } catch {
+            return invalid(.unreadable)
+        }
+        guard let projectRoot = resolvedPath(root.path),
+              let configPath = resolvedPath(config.path), path(configPath, isInside: projectRoot),
+              let attributes = try? fileManager.attributesOfItem(atPath: configPath),
+              attributes[.type] as? FileAttributeType == .typeRegular,
+              let size = attributes[.size] as? NSNumber else {
+            return invalid(.unreadable)
+        }
+        guard size.uint64Value <= commandConfigSizeLimit else { return invalid(.tooLarge) }
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: configPath)) else { return invalid(.unreadable) }
+        guard data.count <= commandConfigSizeLimit else { return invalid(.tooLarge) }
+        guard let manifest = try? JSONDecoder().decode(CommandConfig.self, from: data) else {
+            return invalid(.invalidFormat)
+        }
+        var names = Set<String>()
+        var tasks: [ScriptTask] = []
+        for (offset, entry) in manifest.commands.enumerated() {
+            let index = offset + 1
+            let name = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, name.unicodeScalars.count <= 256,
+                  !containsControlCharacters(entry.name) else { return invalid(.invalidName(index)) }
+            guard names.insert(name).inserted else { return invalid(.duplicateName(index)) }
+            guard !entry.command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !entry.command.utf8.contains(0) else { return invalid(.invalidCommand(index)) }
+            let cwd = entry.cwd ?? "."
+            guard !cwd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !cwd.hasPrefix("/"), !containsControlCharacters(cwd),
+                  let directory = configuredDirectory(projectRoot + "/" + cwd, inside: projectRoot) else {
+                return invalid(.invalidDirectory(index))
+            }
+            let packagePath = relativePath(directory, inside: URL(fileURLWithPath: projectRoot, isDirectory: true))
+            tasks.append(ScriptTask(
+                id: "\(root.absoluteString)#command:\(name)", name: name, directory: directory,
+                executable: "/bin/sh", arguments: ["-c", "--", entry.command],
+                detail: detail("Shell", packagePath: packagePath), packagePath: packagePath, packageName: nil,
+                configuredCommand: .init(text: entry.command, projectRoot: projectRoot)
+            ))
+        }
+        return Discovery(tasks: tasks, commandConfigError: nil)
+    }
+
+    private static func resolvedPath(_ path: String) -> String? {
+        guard let resolved = realpath(path, nil) else { return nil }
+        defer { free(resolved) }
+        return String(validatingUTF8: resolved)
+    }
+
+    private static func path(_ path: String, isInside root: String) -> Bool {
+        path == root || path.hasPrefix(root.hasSuffix("/") ? root : root + "/")
+    }
+
+    fileprivate static func configuredDirectory(_ path: String, inside root: String) -> URL? {
+        var isDirectory: ObjCBool = false
+        guard let resolved = resolvedPath(path), self.path(resolved, isInside: root),
+              fileManager.fileExists(atPath: resolved, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return nil
+        }
+        return URL(fileURLWithPath: resolved, isDirectory: true)
+    }
+
+    private static func containsControlCharacters(_ value: String) -> Bool {
+        value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
     }
 
     private static func projectDirectories(in root: URL) -> [(URL, String)] {
@@ -84,7 +223,7 @@ enum ScriptCatalog {
             return ScriptTask(
                 id: "\(directory.absoluteString)#node:\(name)", name: name, directory: directory,
                 executable: manager, arguments: arguments, detail: detail(manager, packagePath: packagePath),
-                packagePath: packagePath, packageName: packageName
+                packagePath: packagePath, packageName: packageName, scriptDefinition: script
             )
         }
     }
@@ -267,6 +406,13 @@ final class ScriptProcess {
 
     static func start(task: ScriptTask, language: ScriptManagerLanguage, onOutput: @escaping (String) -> Void,
                       onExit: @escaping (Int32) -> Void) throws -> ScriptProcess {
+        if let command = task.configuredCommand,
+           ScriptCatalog.configuredDirectory(task.directory.path, inside: command.projectRoot) == nil {
+            throw CocoaError(.fileReadInvalidFileName, userInfo: [NSLocalizedDescriptionKey: language.text(
+                "The configured working directory is unavailable or outside the project.",
+                "配置的工作目录不可用或不在项目内。"
+            )])
+        }
         let gradleDebugDirectory = task.gradleDebug ? try makeGradleDebugConfiguration() : nil
         var arguments = task.arguments
         if let configuration = gradleDebugDirectory?.appendingPathComponent("debug.gradle") {

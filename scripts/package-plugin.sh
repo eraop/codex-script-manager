@@ -26,7 +26,7 @@ trap cleanup EXIT
 
 mkdir -p "$staged_marketplace/.agents/plugins" "$staged_plugin"
 cp "$repo_dir/plugins/marketplace.json" "$staged_marketplace/.agents/plugins/marketplace.json"
-cp "$plugin_source/plugin.json" "$plugin_source/mcp.json" "$plugin_source/server.py" "$staged_plugin/"
+cp "$plugin_source/plugin.json" "$plugin_source/mcp.json" "$plugin_source/server.py" "$plugin_source/repair.py" "$staged_plugin/"
 cp -R "$plugin_source/app" "$plugin_source/assets" "$plugin_source/skills" "$staged_plugin/"
 /usr/bin/ditto "$output_dir/$app_name" "$staged_plugin/assets/$app_name"
 /usr/bin/codesign --verify --strict "$staged_plugin/assets/$app_name"

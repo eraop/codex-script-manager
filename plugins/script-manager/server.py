@@ -9,6 +9,8 @@ import subprocess
 import sys
 import time
 
+import repair
+
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 APP_PATH = PLUGIN_DIR / "assets" / "Codex Script Manager.app"
@@ -25,6 +27,7 @@ SUPPORTED_VERSIONS = {PROTOCOL_VERSION, "2025-06-18", "2025-03-26"}
 MAX_REQUEST_SIZE = 16 * 1024
 MAX_RESPONSE_SIZE = 8 * 1024 * 1024
 OPEN_DESTINATIONS = ("finder", "vscode")
+PIN_VALUES = ("true", "false")
 ICON_ASSETS = {
     theme: (PLUGIN_DIR / INTERFACE[field]).read_bytes()
     for field, theme in (("logo", "light"), ("logoDark", "dark"))
@@ -55,6 +58,8 @@ OPERATIONS = {
     "open": ("Open a known project in Finder or Visual Studio Code.", ("projectId", "destination"), ("projectId", "destination")),
     "start": ("Start a script discovered in the project.", ("projectId", "taskId"), ("projectId", "taskId")),
     "stop": ("Stop a task managed by Script Manager.", ("projectId", "taskId"), ("projectId", "taskId")),
+    "set_pin": ("Set whether a project script is pinned.", ("projectId", "taskId", "pinned"), ("projectId", "taskId", "pinned")),
+    "ai_fix": ("Open a Codex draft to diagnose a script failure.", ("projectId", "taskId"), ("projectId", "taskId")),
 }
 RESOURCE = {"uri": RESOURCE_URI, "name": APP_TITLE, "mimeType": RESOURCE_MIME}
 
@@ -108,6 +113,8 @@ def tools():
         schema["properties"]["locale"] = {"type": "string", "enum": ["en", "zh-CN"]}
         if name == "open":
             schema["properties"]["destination"] = {"type": "string", "enum": list(OPEN_DESTINATIONS)}
+        if name == "set_pin":
+            schema["properties"]["pinned"] = {"type": "string", "enum": list(PIN_VALUES)}
         yield {
             "name": f"{ENTRY_TOOL}_{name}",
             "description": description,
@@ -234,6 +241,33 @@ def add_pins_for_older_bridge(data):
     projects.sort(key=lambda project: pins.get(project.get("id"), len(pins)))
 
 
+def open_repair_draft(data, arguments, locale):
+    project_id, task_id = arguments["projectId"], arguments["taskId"]
+    def find(items, item_id):
+        if not isinstance(items, list):
+            return None
+        return next((item for item in items if isinstance(item, dict) and item.get("id") == item_id), None)
+
+    project = find(data.get("projects"), project_id)
+    task = find(data.get("tasks"), task_id)
+    if not project or not task or data.get("projectId") != project_id or data.get("selectedTaskId") != task_id:
+        raise BridgeError("Select an existing script to use AI Fix.", "请选择一个现有脚本后再使用 AI 修复。")
+    root = repair.project_root(project.get("path")) if project.get("available") is not False else None
+    if root is None:
+        raise BridgeError("The selected project folder is unavailable.", "所选项目的目录不可用。")
+    log = data.get("log")
+    if not isinstance(log, str):
+        log = ""
+    indices = data["logErrorLines"]
+    if task.get("statusKind") != "failed" and not indices:
+        raise BridgeError("AI Fix needs a failed run or an error in its log.", "AI 修复需要一次失败的运行或日志中的错误。")
+    url = repair.draft_url(root, task, log, indices, chinese=translate(locale, False, True))
+    try:
+        subprocess.run(["/usr/bin/open", url], stdin=subprocess.DEVNULL, capture_output=True, timeout=3, check=True)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise BridgeError("Could not open the Codex repair draft.", "无法打开 Codex 修复草稿。") from error
+
+
 def call_tool(params):
     name, arguments = params.get("name"), params.get("arguments", {})
     meta = params.get("_meta")
@@ -258,15 +292,20 @@ def call_tool(params):
         or any(not isinstance(value, str) or not (1 <= len(value) <= 8192) for value in arguments.values())
         or ("locale" in arguments and locale not in ("en", "zh-CN"))
         or (operation == "open" and arguments["destination"] not in OPEN_DESTINATIONS)
+        or (operation == "set_pin" and arguments["pinned"] not in PIN_VALUES)
     ):
         return tool_result(invalid_arguments, error=True)
     try:
-        data = bridge_call(operation, arguments)
+        data = bridge_call("snapshot" if operation == "ai_fix" else operation, arguments)
         if data.get("schemaVersion") != 2:
             raise BridgeError(
                 "An older Script Manager is running. Quit it after your scripts finish, then reconnect.",
                 "旧版脚本管理仍在运行。请等脚本结束后退出旧版，再重新连接。",
             )
+        data["logErrorLines"] = repair.error_lines(data.get("log"))
+        if operation == "ai_fix":
+            open_repair_draft(data, arguments, locale)
+            return tool_result(translate(locale, "Codex repair draft opened.", "已打开 Codex 修复草稿。"), data={"opened": True})
         add_pins_for_older_bridge(data)
     except BridgeError as error:
         return tool_result(error.localized(locale), error=True)

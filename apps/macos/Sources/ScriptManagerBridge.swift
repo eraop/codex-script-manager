@@ -8,6 +8,7 @@ final class ScriptManagerBridge {
         let taskId: String?
         let locale: String?
         let destination: String?
+        let pinned: String?
     }
 
     enum Failure: LocalizedError {
@@ -90,8 +91,8 @@ final class ScriptManagerBridge {
 
     static func forwardNativeOpen(_ urls: [URL], finished: @escaping () -> Void) {
         let requests = urls.isEmpty
-            ? [Request(method: "revealNative", projectId: nil, taskId: nil, locale: nil, destination: nil)]
-            : urls.map { Request(method: "revealNative", projectId: $0.path, taskId: nil, locale: nil, destination: nil) }
+            ? [Request(method: "revealNative", projectId: nil, taskId: nil, locale: nil, destination: nil, pinned: nil)]
+            : urls.map { Request(method: "revealNative", projectId: $0.path, taskId: nil, locale: nil, destination: nil, pinned: nil) }
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let path = try directoryPath() + "/" + socketName
