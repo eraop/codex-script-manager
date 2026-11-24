@@ -256,10 +256,10 @@
 
     .table-frame { min-height: 0; overflow: auto; overscroll-behavior: contain; overflow-anchor: none; }
     .scripts { width: 100%; border-spacing: 0; table-layout: fixed; }
-    .scripts col:nth-child(1) { width: 49%; }
-    .scripts col:nth-child(2) { width: 22%; }
-    .scripts col:nth-child(3) { width: auto; }
-    .scripts col:nth-child(4) { width: 40px; }
+    .scripts col:nth-child(1) { width: 40px; }
+    .scripts col:nth-child(2) { width: 40%; }
+    .scripts col:nth-child(3) { width: 35%; }
+    .scripts col:nth-child(4) { width: auto; }
     .scripts th, .scripts td { text-align: start; }
     .scripts thead { position: sticky; top: 0; z-index: 1; background: var(--surface); }
     .scripts th { padding: 4px 6px 7px; font-weight: 500; }
@@ -290,19 +290,19 @@
       white-space: nowrap;
     }
     .project-menu-options button:hover { background: var(--hover); }
-    .script-row { cursor: pointer; }
+    .script-row[data-loggable] { cursor: pointer; }
     .script-row td { height: 37px; padding: 3px 6px; }
     .script-row:hover td, .script-row:has(:focus-visible) td { background: var(--hover); }
-    .script-row td:first-child { border-start-start-radius: 6px; border-end-start-radius: 6px; }
-    .script-row td:last-child { border-start-end-radius: 6px; border-end-end-radius: 6px; text-align: end; }
+    .script-row td:first-child { border-start-start-radius: 6px; border-end-start-radius: 6px; text-align: center; }
+    .script-row td:last-child { border-start-end-radius: 6px; border-end-end-radius: 6px; }
     .script-select { display: grid; width: 100%; min-width: 0; padding: 2px 0; border: 0; background: transparent; text-align: start; }
     .script-select:focus-visible { outline-offset: 0; }
-    .script-main { display: flex; align-items: baseline; min-width: 0; gap: 7px; }
-    .script-name { flex: none; max-width: 100%; font-weight: 700; }
-    .script-name:not(:last-child) { max-width: 63%; }
-    .package-name { display: block; }
+    .script-main { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; gap: 0 5px; }
+    .script-name, .script-package { max-width: 100%; }
+    .script-name { font-weight: 700; }
+    .script-package, .command { color: var(--muted); font-size: 12px; }
     .command, .terminal-output { font-family: var(--mono); }
-    .command, .script-project { color: var(--muted); font-size: 11px; }
+    .command { display: block; }
     .status { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; gap: 6px; font-size: 12px; }
     .status::before { content: ""; width: 8px; height: 8px; flex: none; border-radius: 50%; background: currentColor; }
     .status[data-kind="active"], .status[data-kind="succeeded"] { color: var(--green); }
@@ -323,6 +323,40 @@
     .log-header .button { min-height: 31px; }
     .log-header .icon-button { padding-inline: 8px; gap: 0; }
     .log-header .icon-button[data-copied="true"] { color: var(--green); }
+    .log-tabs {
+      display: flex;
+      flex: none;
+      align-items: stretch;
+      gap: 3px;
+      padding: 3px 6px 0;
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
+      scrollbar-width: thin;
+      border-top: 1px solid var(--border);
+      background: var(--raised);
+    }
+    .log-tab {
+      display: inline-flex;
+      flex: none;
+      align-items: center;
+      gap: 6px;
+      max-width: min(230px, 78%);
+      min-height: 32px;
+      padding: 4px 8px;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      border-radius: 5px 5px 0 0;
+      background: transparent;
+      color: var(--muted);
+      text-align: start;
+      font-size: 12px;
+    }
+    .log-tab:hover, .log-tab[aria-selected="true"] { background: var(--surface); color: var(--text); }
+    .log-tab[aria-selected="true"] { border-bottom-color: var(--blue); }
+    .log-tab:focus-visible { outline-offset: -2px; }
+    .log-tab .status { flex: none; }
+    .log-tab .status::before { width: 7px; height: 7px; }
+    .log-panel { display: flex; flex: 1; flex-direction: column; min-height: 0; }
     .log-context { border-top: 1px solid var(--border); }
     .log-title { font-size: 16px; font-weight: 700; }
     .log-detail, .line-count { color: var(--muted); font-size: 12px; }
@@ -402,12 +436,10 @@
       .package-filter select { height: 31px; font-size: 12px; }
       .package-filter .icon { top: 9px; }
       .filter { min-width: 32px; min-height: 25px; padding-inline: 4px; font-size: 12px; }
-      .scripts col:nth-child(1) { width: 43%; }
-      .scripts col:nth-child(2) { width: 24%; }
-      .scripts col:nth-child(4) { width: 28px; }
+      .scripts col:nth-child(1) { width: 28px; }
+      .scripts col:nth-child(2), .scripts col:nth-child(3) { width: 35%; }
       .scripts th, .script-row td { padding-inline: 3px; font-size: 11px; }
-      .script-main { flex-direction: column; gap: 0; }
-      .script-name:not(:last-child), .script-main .command { max-width: 100%; }
+      .script-package, .command { font-size: 11px; }
       .script-action { width: 24px; min-height: 24px; }
       .script-action .icon { width: 13px; height: 13px; }
       .status { gap: 3px; font-size: 11px; }
@@ -425,7 +457,6 @@
 <body>
   <!-- Action glyphs from Ionicons (MIT). -->
 <svg class="icon-definitions" aria-hidden="true">
-    <symbol id="i-layers" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"><path d="M256 48 32 176l224 128 224-128L256 48zM32 256l224 128 224-128M32 336l224 128 224-128"/></symbol>
     <symbol id="i-pin" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M288 64 448 224l-48 16-64 64-16 80-192-192 80-16 64-64 16-48ZM224 288 64 448"/></symbol>
     <symbol id="i-add" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M256 112v288m144-144H112"/></symbol>
     <symbol id="i-arrow-down" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M112 268l144 144l144-144M256 392V100"/></symbol>
@@ -499,10 +530,10 @@
               <colgroup><col><col><col><col></colgroup>
               <thead>
                 <tr>
-                  <th scope="col" data-text="script">Script</th>
-                  <th scope="col" data-text="package">Package</th>
-                  <th scope="col" data-text="status">Status</th>
                   <th scope="col"><span class="sr-only" data-text="action">Action</span></th>
+                  <th scope="col" data-text="script">Script</th>
+                  <th scope="col" data-text="command">Command</th>
+                  <th scope="col" data-text="status">Status</th>
                 </tr>
               </thead>
               <tbody id="script-rows"></tbody>
@@ -522,16 +553,19 @@
             <button class="button" id="log-bottom" type="button" disabled><span data-text="jumpToEnd">Jump to end</span><svg class="icon" aria-hidden="true"><use href="#i-arrow-down"/></svg></button>
           </div>
         </div>
-        <div class="log-context" id="log-context" hidden>
-          <div class="truncate">
-            <p class="log-title truncate" id="log-title"></p>
+        <div class="log-tabs" id="log-tabs" role="tablist" aria-label="Script runs" hidden></div>
+        <div class="log-panel" id="log-panel">
+          <div class="log-context" id="log-context" hidden>
+            <div class="truncate">
+              <p class="log-title truncate" id="log-title"></p>
+            </div>
+            <span class="status" id="log-status"></span>
           </div>
-          <span class="status" id="log-status"></span>
-        </div>
-        <pre class="terminal-output" id="log" aria-label="Script logs" tabindex="0" data-empty>Select a script to view its logs.</pre>
-        <div class="log-footer">
-          <label class="scroll-switch"><input type="checkbox" role="switch" id="log-auto" checked><span data-text="autoScroll">Auto-scroll</span></label>
-          <span class="line-count" id="log-lines">0 lines</span>
+          <pre class="terminal-output" id="log" aria-label="Script logs" tabindex="0" data-empty>Run a script to see its logs here.</pre>
+          <div class="log-footer">
+            <label class="scroll-switch"><input type="checkbox" role="switch" id="log-auto" checked><span data-text="autoScroll">Auto-scroll</span></label>
+            <span class="line-count" id="log-lines">0 lines</span>
+          </div>
         </div>
         <span class="sr-only" id="copy-feedback" role="status"></span>
       </section>
@@ -553,13 +587,12 @@
         projectSearch: "Find a project",
         scriptSearch: "Search scripts",
         filters: "Filter scripts by status",
-        allProjects: "All projects",
         packageFilter: "Filter by package",
         allPackages: "All packages",
         rootPackage: "Root",
         pinned: "Pinned project",
         script: "Script",
-        package: "Package",
+        command: "Command",
         status: "Status",
         action: "Action",
         all: "All",
@@ -571,6 +604,7 @@
         activeProject: "Active scripts",
         logs: "Logs",
         scriptLogs: "Script logs",
+        logTabs: "Script runs",
         copyLogs: "Copy logs",
         copied: "Logs copied",
         copyFailed: "Could not copy logs.",
@@ -599,7 +633,7 @@
         noProjects: "No matching projects.",
         noMatches: "No scripts match the filters.",
         noActive: "No active scripts.",
-        selectScript: "Select a script to view its logs.",
+        noRuns: "Run a script to see its logs here.",
         noLogs: "No logs yet.",
         loadingLogs: "Reading logs…",
         idle: "Idle",
@@ -626,13 +660,12 @@
         projectSearch: "搜索项目",
         scriptSearch: "搜索脚本",
         filters: "按状态筛选脚本",
-        allProjects: "全部项目",
         packageFilter: "按包筛选",
         allPackages: "全部包",
         rootPackage: "根目录",
         pinned: "已置顶",
         script: "脚本",
-        package: "所属包",
+        command: "命令",
         status: "状态",
         action: "操作",
         all: "全部",
@@ -644,6 +677,7 @@
         activeProject: "有脚本正在运行",
         logs: "日志",
         scriptLogs: "脚本日志",
+        logTabs: "脚本运行记录",
         copyLogs: "复制日志",
         copied: "日志已复制",
         copyFailed: "无法复制日志。",
@@ -672,7 +706,7 @@
         noProjects: "没有符合条件的项目。",
         noMatches: "没有符合筛选条件的脚本。",
         noActive: "没有运行中的脚本。",
-        selectScript: "选择一个脚本以查看日志。",
+        noRuns: "运行脚本后，日志会显示在这里。",
         noLogs: "暂无日志。",
         loadingLogs: "正在读取日志…",
         idle: "未运行",
@@ -699,7 +733,7 @@
       "welcome-title", "welcome-text", "dashboard", "counts", "project-count",
       "project-search", "project-list", "scope-info", "scope-controls", "script-search",
       "filters", "filter-all", "filter-active", "package-filter", "script-list", "script-rows",
-      "log", "log-context", "log-title", "log-status", "log-lines", "log-auto",
+      "log", "log-tabs", "log-panel", "log-context", "log-title", "log-status", "log-lines", "log-auto",
       "log-copy", "log-bottom", "copy-feedback"
     ];
     const ui = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
@@ -708,8 +742,9 @@
     const state = {
       status: "idle",
       snapshot: null,
-      selection: {},
-      scopeProjectId: null,
+      projectId: null,
+      logSelection: null,
+      logOutput: null,
       remembered: readPreference(),
       revision: 0,
       action: null,
@@ -735,6 +770,7 @@
     let lastPackages;
     let lastScripts;
     let lastSelectedScript;
+    let lastLogTabs;
     let lastLogId;
     let lastLogText;
 
@@ -769,6 +805,7 @@
       document.title = t("title");
       for (const element of document.querySelectorAll("[data-text]")) setText(element, t(element.dataset.text));
       ui.log.setAttribute("aria-label", t("scriptLogs"));
+      ui["log-tabs"].setAttribute("aria-label", t("logTabs"));
       for (const [id, label] of [["project-search", "projectSearch"], ["script-search", "scriptSearch"]]) {
         ui[id].setAttribute("aria-label", t(label));
         ui[id].placeholder = t(label);
@@ -791,9 +828,7 @@
 
     function rememberSelection() {
       try {
-        window.localStorage.setItem(preferenceKey, JSON.stringify({
-          ...state.selection, scopeProjectId: state.scopeProjectId
-        }));
+        window.localStorage.setItem(preferenceKey, JSON.stringify({ projectId: state.projectId, log: state.logSelection }));
       } catch {
         // Some embedded hosts deny browser storage.
       }
@@ -929,62 +964,62 @@
       return project.id === data.projectId ? data.tasks : [];
     }
 
-    function selectedTask(data) {
-      if (!data) return {};
-      const project = data.projects.find(({ id }) => id === state.selection.projectId);
-      if (!project) return {};
-      const task = projectTasks(data, project).find(({ id }) => id === state.selection.taskId);
-      return { project, task };
+    function taskIsRunning(task) {
+      return task.active || task.stopping || task.statusKind === "running" || task.statusKind === "stopping";
     }
 
-    function selectTaskForScope(data, previous) {
-      const scoped = data.projects.find(({ id }) => id === state.scopeProjectId);
-      const selected = data.projects.find(({ id }) => id === previous.projectId);
-      const project = scoped ?? selected;
-      const candidate = project && projectTasks(data, project);
-      const preferred = project?.id === previous.projectId
-        && candidate?.find(({ id }) => id === previous.taskId);
+    function taskHasRun(task) {
+      return taskIsRunning(task) || Boolean(task.statusKind && task.statusKind !== "idle");
+    }
 
-      if (preferred || project?.scanning) {
-        setSelection(project.id, preferred?.id ?? (project.id === previous.projectId ? previous.taskId : undefined));
-        return;
-      }
+    function matchesRun(selection, project, task) {
+      return selection?.projectId === project.id && selection.taskId === task.id;
+    }
 
-      const target = project && (scoped || candidate.length)
-        ? project
-        : data.projects.find((item) => item.id === data.selectedProjectId && projectTasks(data, item).length)
-          ?? data.projects.find((item) => projectTasks(data, item).length);
-      if (!target) {
-        setSelection();
-        return;
-      }
-      const tasks = projectTasks(data, target);
-      const task = tasks.find(({ id }) => target.id === data.projectId && id === data.selectedTaskId) ?? tasks[0];
-      setSelection(target.id, task?.id);
+    function pendingStart(project, task) {
+      return state.action?.name === "start" && matchesRun(state.action.args, project, task);
+    }
+
+    function runsInSnapshot(data) {
+      return data.projects.flatMap((project) => projectTasks(data, project)
+        .filter((task) => taskHasRun(task) || pendingStart(project, task))
+        .map((task) => ({ project, task })));
+    }
+
+    function reconcileLogSelection(data, remembered) {
+      const runs = runsInSnapshot(data);
+      if (runs.some(({ project, task }) => matchesRun(state.logSelection, project, task))) return;
+      const target = runs.find(({ project, task }) => matchesRun(remembered?.log, project, task))
+        ?? runs.find(({ task }) => taskIsRunning(task))
+        ?? runs.find(({ project, task }) => matchesRun(remembered, project, task))
+        ?? runs[0];
+      setLogSelection(target?.project.id, target?.task.id);
     }
 
     function adoptSnapshot(next) {
-      const pickerFinished = state.snapshot?.pickPending && !next.pickPending;
-      const previouslySelected = state.snapshot?.selectedProjectId;
+      const previous = state.snapshot;
       state.snapshot = next;
+      if (!next.projects.length) {
+        setProjectSelection(null);
+        setLogSelection();
+        return;
+      }
+
       const remembered = state.remembered;
       state.remembered = null;
-      let selection = remembered || state.selection;
-      if (remembered && next.projects.some(({ id }) => id === remembered.scopeProjectId)) {
-        state.scopeProjectId = remembered.scopeProjectId;
+      const picked = previous?.pickPending && !next.pickPending
+        && next.selectedProjectId !== previous.selectedProjectId ? next.selectedProjectId : null;
+      const candidates = [picked, state.projectId, remembered?.scopeProjectId, remembered?.projectId,
+        next.selectedProjectId];
+      const project = candidates.map((id) => next.projects.find((item) => item.id === id)).find(Boolean)
+        ?? next.projects[0];
+      setProjectSelection(project.id);
+      reconcileLogSelection(next, remembered);
+
+      const selected = state.logSelection;
+      if (selected && selected.projectId === next.projectId && selected.taskId === next.selectedTaskId) {
+        state.logOutput = { ...selected, text: typeof next.log === "string" ? next.log : "" };
       }
-      if (pickerFinished && next.selectedProjectId !== previouslySelected
-          && next.projects.some(({ id }) => id === next.selectedProjectId)) {
-        state.scopeProjectId = next.selectedProjectId;
-        state.packageFilter = "";
-        selection = { projectId: next.selectedProjectId };
-      }
-      if (state.scopeProjectId && !next.projects.some(({ id }) => id === state.scopeProjectId)) {
-        state.scopeProjectId = null;
-        state.packageFilter = "";
-      }
-      selectTaskForScope(next, selection);
-      if (pickerFinished) rememberSelection();
     }
 
     function schedule(delay) {
@@ -1001,9 +1036,7 @@
       const requestLocale = locale;
       try {
         const operation = action?.name ?? "snapshot";
-        const args = action?.args ?? Object.fromEntries(
-          Object.entries(state.selection).filter(([, value]) => value)
-        );
+        const args = action?.args ?? state.logSelection ?? (state.projectId ? { projectId: state.projectId } : {});
         const response = await request("tools/call", {
           name: toolPrefix + "_" + operation,
           arguments: { ...args, locale: requestLocale }
@@ -1021,6 +1054,7 @@
         state.busy = false;
         if (action === state.action) state.action = null;
         if (state.status !== "closed") {
+          if (action?.name === "start" && state.snapshot) reconcileLogSelection(state.snapshot);
           render();
           const lively = state.snapshot?.pickPending ||
             state.snapshot?.projects.some((project) => project.activeCount > 0 || project.scanning);
@@ -1031,28 +1065,32 @@
       }
     }
 
-    function setSelection(projectId, taskId) {
-      if (projectId === state.selection.projectId && taskId === state.selection.taskId) return;
-      state.selection = { projectId, taskId };
+    function setProjectSelection(projectId) {
+      if (projectId === state.projectId) return;
+      state.projectId = projectId;
+      state.packageFilter = "";
+      state.menuProjectId = null;
+      ui["script-list"].scrollTop = 0;
+      rememberSelection();
+    }
+
+    function setLogSelection(projectId, taskId) {
+      if (projectId === state.logSelection?.projectId && taskId === state.logSelection?.taskId) return;
+      state.logSelection = projectId && taskId ? { projectId, taskId } : null;
       state.revision++;
       rememberSelection();
     }
 
     function chooseProject(projectId) {
-      if (projectId === state.scopeProjectId) return;
-      state.scopeProjectId = projectId;
-      state.packageFilter = "";
-      state.menuProjectId = null;
+      if (projectId === state.projectId || !state.snapshot?.projects.some(({ id }) => id === projectId)) return;
       state.actionError = null;
-      ui["script-list"].scrollTop = 0;
-      selectTaskForScope(state.snapshot, state.selection);
-      rememberSelection();
+      setProjectSelection(projectId);
       render();
       schedule(0);
     }
 
-    function choose(projectId, taskId) {
-      setSelection(projectId, taskId);
+    function chooseLog(projectId, taskId) {
+      setLogSelection(projectId, taskId);
       state.actionError = null;
       render();
       schedule(0);
@@ -1062,6 +1100,7 @@
       if (state.status !== "ready" || state.action || state.snapshot?.pickPending) return;
       state.actionError = null;
       state.action = { name, args };
+      if (name === "start" || name === "stop") setLogSelection(args.projectId, args.taskId);
       render();
       schedule(0);
     }
@@ -1096,7 +1135,8 @@
     }
 
     function taskKind(task) {
-      return task.stopping ? "stopping" : task.active ? "active" : task.statusKind || "idle";
+      if (task.stopping || task.statusKind === "stopping") return "stopping";
+      return taskIsRunning(task) ? "active" : task.statusKind || "idle";
     }
 
     function taskStatus(task) {
@@ -1116,47 +1156,51 @@
       return { path, name: task.packageName || path.split("/").at(-1) || t("rootPackage") };
     }
 
-    function scriptRow(project, task, waiting) {
+    function scriptRow(project, task, group, waiting) {
       const row = node("tr", "script-row");
-      const select = button("script-select", "", ["log", project.id, task.id], () => choose(project.id, task.id));
-      select.setAttribute("aria-pressed", "false");
-      select.title = task.command || task.name;
-      const taskLabel = node("span", "script-main");
-      taskLabel.append(node("span", "script-name truncate", task.name));
-      if (task.command) taskLabel.append(node("span", "command truncate", task.command));
-      select.append(taskLabel);
-      if (!state.scopeProjectId) select.append(node("span", "script-project truncate", project.name));
+      const name = node("span", "script-main");
+      name.append(node("span", "script-name truncate", task.name));
+      const title = group.path ? task.name + " (" + group.name + ")" : task.name;
+      if (group.path) name.append(" ", node("span", "script-package truncate", "(" + group.name + ")"));
+
       const nameCell = node("td");
-      nameCell.append(select);
-      const group = taskPackage(task);
-      const packageCell = node("td");
-      const packageName = node("span", "package-name truncate", group.name);
-      packageName.title = group.path ? group.name + " · " + group.path : group.name;
-      packageCell.append(packageName);
+      if (taskHasRun(task) || pendingStart(project, task)) {
+        const select = button("script-select", "", ["log", project.id, task.id], () => chooseLog(project.id, task.id));
+        select.setAttribute("aria-pressed", "false");
+        select.title = title;
+        select.append(name);
+        nameCell.append(select);
+        row.setAttribute("data-loggable", "");
+        row.addEventListener("click", (event) => {
+          if (!event.target.closest("button")) chooseLog(project.id, task.id);
+        });
+      } else {
+        name.title = title;
+        nameCell.append(name);
+      }
+
+      const commandCell = node("td");
+      const command = node("code", "command truncate", task.command);
+      command.title = task.command || "";
+      commandCell.append(command);
       const statusCell = node("td");
       const status = node("span", "status", taskStatus(task));
       status.dataset.kind = taskKind(task);
       statusCell.append(status);
 
-      const stopping = task.active || task.stopping;
+      const stopping = taskIsRunning(task);
       const operation = stopping ? "stop" : "start";
-      const pending = state.action?.name === operation && state.action.args.projectId === project.id &&
-        state.action.args.taskId === task.id;
+      const pending = state.action?.name === operation && matchesRun(state.action.args, project, task);
       const label = t(pending ? (stopping ? "stoppingAction" : "starting") : operation);
-      const run = button("button script-action", "", ["run", project.id, task.id], () => {
-        setSelection(project.id, task.id);
-        queueAction(operation, { projectId: project.id, taskId: task.id });
-      });
+      const run = button("button script-action", "", ["run", project.id, task.id],
+        () => queueAction(operation, { projectId: project.id, taskId: task.id }));
       run.setAttribute("aria-label", label + " " + task.name);
       run.title = label;
       run.append(icon(stopping ? "stop" : "play"));
-      run.disabled = waiting || Boolean(task.stopping) || (project.available === false && !stopping);
+      run.disabled = waiting || taskKind(task) === "stopping" || (project.available === false && !stopping);
       const action = node("td");
       action.append(run);
-      row.addEventListener("click", (event) => {
-        if (!event.target.closest("button")) choose(project.id, task.id);
-      });
-      row.append(nameCell, packageCell, statusCell, action);
+      row.append(action, nameCell, commandCell, statusCell);
       return row;
     }
 
@@ -1206,17 +1250,15 @@
 
     function projectItem(project) {
       const item = node("li");
-      const id = project?.id ?? null;
-      const name = project?.name || t("allProjects");
-      const select = button("project-button", "", ["project", id], () => chooseProject(id));
-      select.setAttribute("aria-pressed", String(state.scopeProjectId === id));
-      select.title = project?.path || name;
-      select.toggleAttribute("data-missing", project?.available === false);
-      select.append(icon(project ? "folder" : "layers"), node("span", "truncate", name));
-      if (project?.pinned) {
+      const select = button("project-button", "", ["project", project.id], () => chooseProject(project.id));
+      select.setAttribute("aria-pressed", String(state.projectId === project.id));
+      select.title = project.path || project.name;
+      select.toggleAttribute("data-missing", project.available === false);
+      select.append(icon("folder"), node("span", "truncate", project.name));
+      if (project.pinned) {
         select.append(icon("pin", "pin"), node("span", "sr-only", t("pinned")));
       }
-      if (project?.activeCount > 0) {
+      if (project.activeCount > 0) {
         const active = node("span", "project-active");
         active.setAttribute("aria-hidden", "true");
         select.append(active, node("span", "sr-only", t("activeProject")));
@@ -1231,7 +1273,7 @@
       matches.sort((first, second) => Number(Boolean(second.pinned)) - Number(Boolean(first.pinned)));
       const entries = matches.map(({ id, name, path, pinned, activeCount, available }) =>
         ({ id, name, path, pinned, activeCount, available }));
-      const signature = JSON.stringify([locale, entries, state.scopeProjectId]);
+      const signature = JSON.stringify([locale, entries, state.projectId]);
       if (lastProjectList === signature) return;
       lastProjectList = signature;
 
@@ -1240,7 +1282,7 @@
       const focus = focusedKey(list);
       const items = entries.map(projectItem);
       if (!entries.length) items.push(node("li", "project-caption", t("noProjects")));
-      list.replaceChildren(projectItem(null), ...items);
+      list.replaceChildren(...items);
       list.scrollTop = scrollPosition;
       if (focus) findFocus(list, focus)?.focus({ preventScroll: true });
     }
@@ -1258,34 +1300,32 @@
 
     function renderScope(project, waiting) {
       const signature = JSON.stringify([
-        locale, project?.id, project?.name, project?.path, project?.displayPath, project?.available,
+        locale, project.id, project.name, project.path, project.displayPath, project.available,
         state.menuProjectId, waiting
       ]);
       if (lastScope === signature) return;
       lastScope = signature;
       const controls = ui["scope-controls"];
       const focus = focusedKey(controls);
-      const name = project?.name || t("allProjects");
-      const heading = node("h2", "truncate", name);
+      const heading = node("h2", "truncate", project.name);
       heading.id = "scope-title";
-      heading.title = name;
-      ui["scope-info"].replaceChildren(icon(project ? "folder" : "layers"), heading);
-      if (project) ui["scope-info"].append(projectPath(project));
-      controls.replaceChildren(...(project ? [projectMenu(project, waiting)] : []));
+      heading.title = project.name;
+      ui["scope-info"].replaceChildren(icon("folder"), heading, projectPath(project));
+      controls.replaceChildren(projectMenu(project, waiting));
       if (focus) findFocus(controls, focus)?.focus({ preventScroll: true });
     }
 
-    function packageChoice(project, group) {
-      return JSON.stringify([project.id, group.path]);
+    function packageChoice(group) {
+      return JSON.stringify(group.path);
     }
 
     function renderPackages(entries) {
       const packages = new Map();
-      for (const { project, group } of entries) {
-        const key = packageChoice(project, group);
+      for (const { group } of entries) {
+        const key = packageChoice(group);
         if (packages.has(key)) continue;
         const label = group.path !== group.name && group.path ? group.name + " · " + group.path : group.name;
-        packages.set(key, state.scopeProjectId ? label : project.name + " / " + label);
+        packages.set(key, label);
       }
 
       const signature = JSON.stringify([locale, [...packages]]);
@@ -1302,7 +1342,7 @@
     }
 
     function showSelectedScript() {
-      const { projectId, taskId } = state.selection;
+      const { projectId, taskId } = state.logSelection ?? {};
       const key = projectId && taskId ? JSON.stringify(["log", projectId, taskId]) : null;
       if (lastSelectedScript?.dataset.focusKey === key && lastSelectedScript.isConnected) return;
       lastSelectedScript?.setAttribute("aria-pressed", "false");
@@ -1311,25 +1351,23 @@
     }
 
     function renderScripts(data, project, waiting) {
-      const scope = project ? [project] : data.projects;
-      const entries = scope.flatMap((item) =>
-        projectTasks(data, item).map((task) => ({ project: item, task, group: taskPackage(task) })));
+      const entries = projectTasks(data, project).map((task) => ({ task, group: taskPackage(task) }));
       renderPackages(entries);
 
       const query = state.scriptQuery.trim().toLocaleLowerCase(locale);
-      const visible = entries.filter(({ project, task, group }) => (
-        (!state.activeOnly || task.active || task.stopping) &&
-        (!state.packageFilter || state.packageFilter === packageChoice(project, group)) &&
+      const visible = entries.filter(({ task, group }) => (
+        (!state.activeOnly || taskIsRunning(task)) &&
+        (!state.packageFilter || state.packageFilter === packageChoice(group)) &&
         textMatches(query, task.name, task.command, task.detail, group.name, group.path)
       ));
       ui["filter-all"].setAttribute("aria-pressed", String(!state.activeOnly));
       ui["filter-active"].setAttribute("aria-pressed", String(state.activeOnly));
-      const emptyMessage = project?.available === false ? "projectUnavailable"
-        : scope.some((item) => item.scanning) && !entries.length ? "scanningFiles"
+      const emptyMessage = project.available === false ? "projectUnavailable"
+        : project.scanning && !entries.length ? "scanningFiles"
         : query || state.packageFilter ? "noMatches" : state.activeOnly ? "noActive" : "noScripts";
       const signature = JSON.stringify([
-        locale, state.scopeProjectId, waiting, state.action, emptyMessage,
-        visible.map(({ project: { id, name, available }, task }) => [id, name, available, task])
+        locale, project.id, project.available, waiting, state.action, emptyMessage,
+        visible.map(({ task }) => task)
       ]);
 
       if (lastScripts === signature) {
@@ -1341,7 +1379,7 @@
       const table = ui["script-rows"];
       const scrollPosition = list.scrollTop;
       const focus = focusedKey(table);
-      const rows = visible.map(({ project, task }) => scriptRow(project, task, waiting));
+      const rows = visible.map(({ task, group }) => scriptRow(project, task, group, waiting));
       if (!rows.length) {
         const row = node("tr");
         const cell = node("td", "empty", t(emptyMessage));
@@ -1364,21 +1402,107 @@
       ui.log.scrollTop = ui.log.scrollHeight;
     }
 
-    function renderLog(data) {
-      const { project, task } = selectedTask(data);
-      const current = task && data.projectId === project.id && data.selectedTaskId === task.id;
-      const log = current && typeof data.log === "string" ? data.log : "";
-      const text = log || t(!task ? "selectScript" : current ? "noLogs" : "loadingLogs");
-      const logId = task ? JSON.stringify([project.id, task.id]) : "";
-      const switched = logId !== lastLogId;
-      ui["log-context"].hidden = !task;
-      if (task) {
+    function revealLogTab(tab) {
+      if (!tab) return;
+      const list = ui["log-tabs"];
+      const bounds = list.getBoundingClientRect();
+      const position = tab.getBoundingClientRect();
+      if (position.left < bounds.left) list.scrollLeft -= bounds.left - position.left;
+      else if (position.right > bounds.right) list.scrollLeft += position.right - bounds.right;
+    }
+
+    function renderLogTabs(runs) {
+      const list = ui["log-tabs"];
+      const panel = ui["log-panel"];
+      const titles = new Map();
+      const tabs = runs.map(({ project, task }) => {
         const group = taskPackage(task);
         const title = [project.name, group.path ? group.name : null, task.name].filter(Boolean).join(" / ");
+        const location = [project.displayPath || project.path, group.path].filter(Boolean).join("/");
+        titles.set(title, (titles.get(title) ?? 0) + 1);
+        return { project, task, title, location, kind: pendingStart(project, task) ? "active" : taskKind(task) };
+      });
+      const active = tabs.findIndex(({ project, task }) => matchesRun(state.logSelection, project, task));
+      const signature = JSON.stringify(tabs.map(({ project, task, title, location, kind }, index) =>
+        [project.id, task.id, title, location, kind, index === active]));
+      if (lastLogTabs !== signature) {
+        lastLogTabs = signature;
+        const previousKey = list.querySelector('[aria-selected="true"]')?.dataset.focusKey;
+        const focus = focusedKey(list);
+        const scrollPosition = list.scrollLeft;
+        const elements = tabs.map(({ project, task, title, location, kind }, index) => {
+          const selected = index === active;
+          const control = button("log-tab", "", ["log-tab", project.id, task.id], () => chooseLog(project.id, task.id));
+          control.id = "script-log-tab-" + index;
+          control.title = location ? title + " · " + location : title;
+          control.tabIndex = selected ? 0 : -1;
+          control.setAttribute("role", "tab");
+          control.setAttribute("aria-controls", panel.id);
+          control.setAttribute("aria-selected", String(selected));
+          const indicator = node("span", "status");
+          indicator.dataset.kind = kind;
+          indicator.setAttribute("aria-hidden", "true");
+          const label = titles.get(title) > 1 && location ? title + " · " + location : title;
+          control.append(indicator, node("span", "truncate", label));
+          return control;
+        });
+        list.hidden = !elements.length;
+        list.replaceChildren(...elements);
+        list.scrollLeft = scrollPosition;
+        if (active >= 0) {
+          panel.setAttribute("role", "tabpanel");
+          panel.setAttribute("aria-labelledby", elements[active].id);
+        } else {
+          panel.removeAttribute("role");
+          panel.removeAttribute("aria-labelledby");
+        }
+        if (focus) (findFocus(list, focus) ?? elements[active])?.focus({ preventScroll: true });
+        if (elements[active]?.dataset.focusKey !== previousKey) revealLogTab(elements[active]);
+      }
+      return tabs[active];
+    }
+
+    function navigateLogTabs(event) {
+      const list = ui["log-tabs"];
+      const tabs = Array.from(list.querySelectorAll('[role="tab"]'));
+      const current = tabs.indexOf(event.target);
+      if (current < 0) return;
+      const next = {
+        ArrowLeft: (current + tabs.length - 1) % tabs.length,
+        ArrowRight: (current + 1) % tabs.length,
+        Home: 0,
+        End: tabs.length - 1
+      }[event.key];
+      if (!Number.isInteger(next)) return;
+      event.preventDefault();
+      const target = tabs[next];
+      const key = target.dataset.focusKey;
+      target.click();
+      const active = findFocus(list, key);
+      active?.focus({ preventScroll: true });
+      revealLogTab(active);
+    }
+
+    function focusedLogOutput() {
+      const { logOutput, logSelection } = state;
+      return logOutput && logSelection?.projectId === logOutput.projectId && logSelection.taskId === logOutput.taskId
+        ? logOutput.text : undefined;
+    }
+
+    function renderLog(data) {
+      const run = renderLogTabs(runsInSnapshot(data));
+      const output = run ? focusedLogOutput() : undefined;
+      const log = output || "";
+      const text = log || t(!run ? "noRuns" : output === undefined ? "loadingLogs" : "noLogs");
+      const logId = run ? JSON.stringify([run.project.id, run.task.id]) : "";
+      const switched = logId !== lastLogId;
+      ui["log-context"].hidden = !run;
+      if (run) {
+        const { project, task, title, kind } = run;
         setText(ui["log-title"], title);
         ui["log-title"].title = title;
-        setText(ui["log-status"], taskStatus(task));
-        ui["log-status"].dataset.kind = taskKind(task);
+        setText(ui["log-status"], pendingStart(project, task) ? t("starting") : taskStatus(task));
+        ui["log-status"].dataset.kind = kind;
       }
       if (switched || text !== lastLogText) {
         setText(ui.log, text);
@@ -1419,19 +1543,18 @@
     }
 
     async function copyLogs() {
-      const data = state.snapshot;
-      const { project, task } = selectedTask(data);
-      if (!task || data.projectId !== project.id || data.selectedTaskId !== task.id || !data.log) return;
+      const log = focusedLogOutput();
+      if (!log) return;
       let copied = false;
       try {
         if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(data.log);
+          await navigator.clipboard.writeText(log);
           copied = true;
         } else {
-          copied = copyThroughSelection(data.log);
+          copied = copyThroughSelection(log);
         }
       } catch {
-        try { copied = copyThroughSelection(data.log); } catch { /* The host may block clipboard writes. */ }
+        try { copied = copyThroughSelection(log); } catch { /* The host may block clipboard writes. */ }
       }
       updateCopyFeedback(copied ? "copied" : "copyFailed");
       if (!copied) {
@@ -1470,10 +1593,10 @@
         setText(ui.counts, quantity(projects.length, "oneProject", "projectCount") + " · " +
           quantity(scripts, "oneScript", "scriptCount"));
         setText(ui["project-count"], new Intl.NumberFormat(locale).format(projects.length));
-        const scope = projects.find(({ id }) => id === state.scopeProjectId);
+        const project = projects.find(({ id }) => id === state.projectId);
         renderProjectList(projects);
-        renderScope(scope, waiting);
-        renderScripts(data, scope, waiting);
+        renderScope(project, waiting);
+        renderScripts(data, project, waiting);
         renderLog(data);
       } else {
         setText(ui.counts, "");
@@ -1548,6 +1671,7 @@
       else void connect();
       render();
     });
+    ui["log-tabs"].addEventListener("keydown", navigateLogTabs);
     ui["log-copy"].addEventListener("click", copyLogs);
     ui["log-bottom"].addEventListener("click", scrollToEnd);
     ui["log-auto"].addEventListener("change", () => {

@@ -1,6 +1,6 @@
 ---
 name: script-manager
-description: Open the native Script Manager panel for the current local Codex project or worktree. Use for requests such as “打开当前项目的脚本管理面板” or “open Script Manager for this project.”
+description: Open the native Script Manager window for the current local Codex project or worktree. Use when asked to open Script Manager for the current project.
 ---
 
 # Open Script Manager

@@ -1,54 +1,56 @@
-# Codex Actions
+# Codex Script Manager
 
-在 Codex 桌面端管理 macOS 本地项目的脚本。
+A Codex desktop plugin for running local project scripts and viewing logs on macOS.
 
-| 入口 | 使用方式 |
+| Entry point | Use |
 | --- | --- |
-| 插件侧栏 | 从 Codex 侧栏打开「脚本管理 / Script Manager」，管理已添加的本地项目脚本和日志 |
-| 会话技能 | 在本地项目会话中选择 `script-manager` 技能，用原生浮窗打开当前项目或工作树 |
-| 项目 Action（可选） | 在项目会话中运行「脚本管理」，直接打开同一个原生浮窗 |
+| Sidebar plugin | Open Script Manager in Codex to browse projects, run scripts, and view logs. |
+| Chat skill | Use the `script-manager` skill in a local project chat to open the native window for the current project or worktree. |
+| Project action (optional) | Run the installed action from the project's local environment to open the same native window. |
 
-所有入口共用一个本地运行管理器。关闭浮窗或切走侧栏界面后，脚本会继续运行，重新打开任一入口即可查看状态和最近一次运行的日志。退出本地脚本管理器时会停止它托管的脚本。
+All three entry points share one local script runner. Closing the window or leaving the sidebar keeps scripts running. Reopen either view to see their status and latest logs. Quitting the native app stops the scripts it manages.
 
-## 安装脚本管理插件
+## Install the plugin
 
-需要 macOS 13+、Xcode 或 Command Line Tools、Python 3.9+ 和支持本地插件的 Codex 桌面端。在仓库根目录执行以下命令。
+You need macOS 13 or later, Xcode or Command Line Tools, Python 3.9 or later, and a Codex desktop version that supports local plugins. Run these commands from the repository root:
 
 ```bash
 ./scripts/package-plugin.sh
 codex plugin marketplace add "$(pwd -P)/build/codex-marketplace"
-codex plugin add script-manager@codex-actions
+codex plugin add script-manager@codex-script-manager
 ```
 
-在 Codex 最左侧的「探索」（…）找到「脚本管理 / Script Manager」，选择固定到侧栏。若刚安装的插件尚未显示，可在当前任务结束后重开桌面端。 [Codex 插件安装](https://developers.openai.com/plugins/build/plugins#install-a-local-plugin-manually) · [侧栏 App](https://developers.openai.com/plugins/build/extensions#sidebar-apps)
+Open **Explore** in the Codex sidebar, find **Script Manager**, and pin it. If a newly installed plugin does not appear, reopen Codex. [Local plugin installation](https://developers.openai.com/plugins/build/plugins#install-a-local-plugin-manually) · [Sidebar apps](https://developers.openai.com/plugins/build/extensions#sidebar-apps)
 
-侧栏面板随 Codex 界面切换简体中文和英文。原生浮窗打开时读取 Codex 的当前语言，读不到时使用 macOS 首选语言。插件列表和侧栏入口使用固定的双语名称。脚本自身的日志保留原文。
+Script Manager lists local Codex projects and puts pinned projects first in their Codex order. Use **Open Project** to add another local folder. Select one project at a time, then search its scripts or filter them by package or status. Scripts in subpackages show the package name in parentheses. Use the button at the start of a row to run or stop its script.
 
-侧栏默认显示 Codex 已添加的本地项目。Codex 中置顶的项目按置顶顺序显示在最上方。用「打开项目」也可以添加其他本机文件夹，它们会保存在脚本管理中。项目和脚本可分别搜索，脚本还可按包或运行状态筛选。宽度不足时，日志移到项目和脚本下方。
+The logs panel shows the latest output for each script that has run across any project, including scripts that have stopped or finished. Select its row or log tab to see the output. Changing projects keeps the current log open. The logs panel moves below the project and script lists on narrower windows.
 
-若安装过独立的「脚本管理 MCP」，安装新版后可移除旧插件和它的市场。
+The sidebar follows the Codex interface language. The native window reads the Codex language when it opens and falls back to the macOS preferred language. Script output is displayed as written.
+
+If you installed the plugin using its former ID, remove that installation and marketplace after installing the current one:
 
 ```bash
-codex plugin remove script-manager-mcp@codex-actions-mcp
-codex plugin marketplace remove codex-actions-mcp
+codex plugin remove script-manager@codex-actions
+codex plugin marketplace remove codex-actions
 ```
 
-## 安装项目 Action（可选）
+## Add the optional project action
 
-在仓库根目录执行以下命令，安装器需要 Python 3.11+ 或装有 `tomli` 的 Python。
+The action installer needs Python 3.11 or later, or Python with `tomli` installed. From the repository root, run:
 
 ```bash
 ./scripts/build.sh
-./scripts/install-action.py '/目标项目根目录'
+./scripts/install-action.py '/path/to/project'
 ```
 
-安装器将「脚本管理」添加到项目的 `.codex/environments/environment.toml`，保留其他配置。可用 `--environment 文件名.toml` 选择已有环境、`--app '/应用路径.app'` 指定应用，或用 `--dry-run` 查看生成的命令。
+The installer adds a project action to `.codex/environments/environment.toml` and preserves the existing configuration. Use `--environment filename.toml` to select another environment file, `--app '/path/to/app.app'` to point to another app build, or `--dry-run` to print the generated command.
 
-在目标项目的本地会话中，按 `⌘K` 搜索并运行「脚本管理」。若当前会话已打开，切换到其他会话后再回来即可刷新环境配置。 [Codex 项目 Actions](https://learn.chatgpt.com/docs/environments/local-environment#actions)
+Open the project's local environment in Codex and run the installed action. If the chat was open during installation, switch to another chat and back to reload the configuration. [Codex project actions](https://learn.chatgpt.com/docs/environments/local-environment#actions)
 
-## 支持的脚本
+## Supported scripts
 
-- Node.js 项目从 `package.json` 发现脚本，按声明或锁文件选择 npm、pnpm、Yarn 或 Bun。
-- Spring Boot 的 Maven 和 Gradle 模块支持 Run 和 Debug。调试地址为 `127.0.0.1:5005`。
-- 脚本和构建任务均在各自配置文件所在的目录执行，子模块也一样。
-- 各入口都使用 `apps/macos/` 的脚本发现和进程管理代码，插件位于 `plugins/script-manager/`。
+- Node.js scripts come from `package.json`. Script Manager picks npm, pnpm, Yarn, or Bun based on the package declaration or lockfile.
+- Maven and Gradle Spring Boot modules support Run and Debug. The debug address is `127.0.0.1:5005`.
+- Scripts and build tasks run in the directory containing their configuration file, including nested modules.
+- The native script runner is in `apps/macos/`, and the plugin is in `plugins/script-manager/`.

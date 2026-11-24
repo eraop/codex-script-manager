@@ -25,15 +25,29 @@ SUPPORTED_VERSIONS = {PROTOCOL_VERSION, "2025-06-18", "2025-03-26"}
 MAX_REQUEST_SIZE = 16 * 1024
 MAX_RESPONSE_SIZE = 8 * 1024 * 1024
 OPEN_DESTINATIONS = ("finder", "vscode")
-ICONS = [
-    {
-        "src": "data:image/svg+xml;base64," + base64.b64encode((PLUGIN_DIR / INTERFACE[field]).read_bytes()).decode("ascii"),
-        "mimeType": "image/svg+xml",
-        "sizes": ["48x48"],
-        "theme": theme,
-    }
+ICON_ASSETS = {
+    theme: (PLUGIN_DIR / INTERFACE[field]).read_bytes()
     for field, theme in (("logo", "light"), ("logoDark", "dark"))
-]
+}
+
+
+def encode_icons(assets):
+    return [
+        {
+            "src": "data:image/svg+xml;base64," + base64.b64encode(svg).decode("ascii"),
+            "mimeType": "image/svg+xml",
+            "sizes": ["48x48"],
+            "theme": theme,
+        }
+        for theme, svg in assets.items()
+    ]
+
+
+BRAND_ICONS = encode_icons(ICON_ASSETS)
+SIDEBAR_ICONS = encode_icons({
+    theme: svg.replace(b'viewBox="0 0 24 24"', b'viewBox="-2 -2 28 28"', 1)
+    for theme, svg in ICON_ASSETS.items()
+})
 OPERATIONS = {
     "snapshot": ("Read projects, task status, and logs.", ("projectId", "taskId"), ()),
     "choose": ("Open the local project folder picker.", (), ()),
@@ -80,10 +94,10 @@ def tools():
     yield {
         "name": ENTRY_TOOL,
         "title": APP_TITLE,
-        "description": "Open Script Manager for local macOS projects. 打开 macOS 本地项目的脚本管理界面。",
+        "description": "Open Script Manager for local macOS projects.",
         "inputSchema": object_schema(),
         "annotations": {"readOnlyHint": True, "openWorldHint": False},
-        "icons": ICONS,
+        "icons": SIDEBAR_ICONS,
         "_meta": {
             "ui": {"resourceUri": RESOURCE_URI},
             "openai/ui": {"entrypoints": [{"type": "global"}]},
@@ -271,7 +285,7 @@ def dispatch(method, params):
                 "name": MANIFEST["name"],
                 "title": APP_TITLE,
                 "version": MANIFEST["version"],
-                "icons": ICONS,
+                "icons": SIDEBAR_ICONS,
             },
         }
     if method == "ping":
@@ -288,7 +302,7 @@ def dispatch(method, params):
         if params.get("uri") != RESOURCE_URI:
             raise RpcError(-32002, "Resource not found")
         html = (PLUGIN_DIR / "app" / "index.html").read_text(encoding="utf-8")
-        for icon in ICONS:
+        for icon in BRAND_ICONS:
             html = html.replace(f"__SCRIPT_MANAGER_ICON_{icon['theme'].upper()}__", icon["src"])
         html = html.replace("__SCRIPT_MANAGER_VERSION__", MANIFEST["version"])
         return {
