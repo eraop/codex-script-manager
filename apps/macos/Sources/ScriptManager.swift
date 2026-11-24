@@ -86,7 +86,6 @@ final class ScriptManager: ObservableObject {
     @Published private(set) var selectedProjectID: String?
     @Published private(set) var selectedTaskIDs: [String: String] = [:]
     @Published private(set) var activeCount: [String: Int] = [:]
-    @Published private var scriptPins: [String: [String]]
     @Published var errorMessage: String?
     @Published var searchQuery = ""
     @Published var language: ScriptManagerLanguage = .initial
@@ -97,7 +96,6 @@ final class ScriptManager: ObservableObject {
     }
 
     private static let manualProjectsKey = "manualProjectPaths"
-    private static let scriptPinsKey = "pinnedProjectScripts"
     private let defaults: UserDefaults
     private let projectCatalog: CodexProjectCatalog
     private var codexFolders: [CodexProjectCatalog.Folder] = []
@@ -121,23 +119,6 @@ final class ScriptManager: ObservableObject {
         self.defaults = defaults
         self.projectCatalog = projectCatalog
         manualFolders = defaults.stringArray(forKey: Self.manualProjectsKey) ?? []
-        scriptPins = defaults.dictionary(forKey: Self.scriptPinsKey) as? [String: [String]] ?? [:]
-    }
-
-    func isScriptPinned(_ task: ScriptTask, in projectID: String) -> Bool {
-        scriptPins[projectID]?.contains(task.id) == true
-    }
-
-    func setScriptPinned(_ pinned: Bool, for task: ScriptTask, in projectID: String) {
-        guard pinned != isScriptPinned(task, in: projectID) else { return }
-        var tasks = scriptPins[projectID] ?? []
-        if pinned {
-            tasks.append(task.id)
-        } else {
-            tasks.removeAll { $0 == task.id }
-        }
-        scriptPins[projectID] = tasks.isEmpty ? nil : tasks
-        defaults.set(scriptPins, forKey: Self.scriptPinsKey)
     }
 
     func synchronizeProjects(force: Bool = false) {
@@ -372,7 +353,7 @@ final class ScriptManager: ObservableObject {
             if let error = openDirectory(for: project, destination: request.destination) {
                 return Self.bridgeError(error)
             }
-        case "start", "stop", "set_pin":
+        case "start", "stop":
             guard let project = requestedProject else {
                 return Self.bridgeError(language.text("This project is not open.", "该项目尚未打开。"))
             }
@@ -380,19 +361,13 @@ final class ScriptManager: ObservableObject {
                 return Self.bridgeError(language.text("Script not found in this project. Rescan the project.",
                                                       "该项目中找不到脚本。请重新扫描。"))
             }
-            switch request.method {
-            case "start":
+            if request.method == "start" {
                 guard project.isAvailable else {
                     return Self.bridgeError(language.text("The project folder is unavailable.", "项目目录不可用。"))
                 }
                 start(task, in: project)
-            case "stop":
+            } else {
                 stop(run(for: task, in: project))
-            default:
-                guard let pinned = request.pinned.flatMap(Bool.init) else {
-                    return Self.bridgeError(language.text("Invalid script pin value.", "脚本置顶状态无效。"))
-                }
-                setScriptPinned(pinned, for: task, in: project.id)
             }
         default:
             return Self.bridgeError(language.text("Unknown Script Manager operation.", "未知的脚本管理操作。"))
@@ -418,7 +393,6 @@ final class ScriptManager: ObservableObject {
         return ["ok": true, "data": [
             "schemaVersion": 2,
             "supportsCustomCommands": true,
-            "supportsScriptPins": true,
             "projects": projectRows,
             "selectedProjectId": selectedProjectID as Any? ?? NSNull(),
             "projectId": project?.id as Any? ?? NSNull(),
@@ -438,7 +412,6 @@ final class ScriptManager: ObservableObject {
                 "usage": task.usage.bridgeValue,
                 "status": status.label(in: language), "statusKind": status.kind,
                 "active": status.isActive, "stopping": status == .stopping,
-                "pinned": isScriptPinned(task, in: project.id),
             ]
             if let packageName = task.packageName { row["packageName"] = packageName }
             if case .failed(let code) = status { row["exitCode"] = code as Any? ?? NSNull() }
@@ -446,7 +419,7 @@ final class ScriptManager: ObservableObject {
         }
     }
 
-    func isRunning(_ task: ScriptTask, in projectID: String) -> Bool {
+    private func isRunning(_ task: ScriptTask, in projectID: String) -> Bool {
         runs[TaskKey(projectID: projectID, taskID: task.id)]?.status.isActive == true
     }
 

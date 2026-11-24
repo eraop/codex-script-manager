@@ -24,8 +24,6 @@ Open **Explore** in the Codex sidebar, find **Script Manager**, and pin it. If a
 
 Script Manager lists local Codex projects and puts pinned projects first in their Codex order. Use **Open Project** to add another local folder. Select one project at a time, then search its scripts or filter them by package or status. Scripts in subpackages show the package name in parentheses. Use the button at the start of a row to run or stop its script.
 
-Each project lists pinned scripts first, then common entry points referenced in development documentation and automation or specialized scripts used by workflows, other scripts, or recognizable lifecycle tasks. Each row shows the evidence for its group. **Needs review** is collapsed by default, and matching scripts appear when you search. Use the pin button to keep a script at the top of its project in both the sidebar and the native window. Rescan after changing a script or its documentation.
-
 The logs panel shows the latest output for scripts across projects. Select a script row or log tab to see the output. Closing a running tab stops its command. Select the script row to reopen its latest log. Changing projects keeps the current log open. The logs panel moves below the project and script lists on narrower windows.
 
 Script Manager highlights recognized error lines. For a failed run or recognized error, **AI Fix** opens a Codex draft in the script's project with a short diagnostic excerpt. Review and send the draft to ask Codex to fix missing dependencies or project setup and identify required environment variables.

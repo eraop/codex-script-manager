@@ -27,7 +27,6 @@ SUPPORTED_VERSIONS = {PROTOCOL_VERSION, "2025-06-18", "2025-03-26"}
 MAX_REQUEST_SIZE = 16 * 1024
 MAX_RESPONSE_SIZE = 8 * 1024 * 1024
 OPEN_DESTINATIONS = ("finder", "vscode")
-PIN_VALUES = ("true", "false")
 ICON_ASSETS = {
     theme: (PLUGIN_DIR / INTERFACE[field]).read_bytes()
     for field, theme in (("logo", "light"), ("logoDark", "dark"))
@@ -58,7 +57,6 @@ OPERATIONS = {
     "open": ("Open a known project in Finder or Visual Studio Code.", ("projectId", "destination"), ("projectId", "destination")),
     "start": ("Start a script discovered in the project.", ("projectId", "taskId"), ("projectId", "taskId")),
     "stop": ("Stop a task managed by Script Manager.", ("projectId", "taskId"), ("projectId", "taskId")),
-    "set_pin": ("Set whether a project script is pinned.", ("projectId", "taskId", "pinned"), ("projectId", "taskId", "pinned")),
     "ai_fix": ("Open a Codex draft to diagnose a script failure.", ("projectId", "taskId"), ("projectId", "taskId")),
 }
 RESOURCE = {"uri": RESOURCE_URI, "name": APP_TITLE, "mimeType": RESOURCE_MIME}
@@ -113,8 +111,6 @@ def tools():
         schema["properties"]["locale"] = {"type": "string", "enum": ["en", "zh-CN"]}
         if name == "open":
             schema["properties"]["destination"] = {"type": "string", "enum": list(OPEN_DESTINATIONS)}
-        if name == "set_pin":
-            schema["properties"]["pinned"] = {"type": "string", "enum": list(PIN_VALUES)}
         yield {
             "name": f"{ENTRY_TOOL}_{name}",
             "description": description,
@@ -292,7 +288,6 @@ def call_tool(params):
         or any(not isinstance(value, str) or not (1 <= len(value) <= 8192) for value in arguments.values())
         or ("locale" in arguments and locale not in ("en", "zh-CN"))
         or (operation == "open" and arguments["destination"] not in OPEN_DESTINATIONS)
-        or (operation == "set_pin" and arguments["pinned"] not in PIN_VALUES)
     ):
         return tool_result(invalid_arguments, error=True)
     try:
