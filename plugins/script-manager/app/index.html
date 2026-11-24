@@ -1,0 +1,1576 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Script Manager</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --background: #f6f6f6;
+      --surface: #fff;
+      --raised: #f1f1f1;
+      --hover: #e8e8e8;
+      --selected: #e6eef8;
+      --text: #1c1c1c;
+      --muted: #626262;
+      --border: #d8d8d8;
+      --control-border: #bcbcbc;
+      --primary: #252525;
+      --on-primary: #fff;
+      --blue: #1672d4;
+      --green: #238725;
+      --amber: #905200;
+      --danger: #a22424;
+      --mono: "SF Mono", Menlo, ui-monospace, monospace;
+      font: 14px/1.45 "Avenir Next", "PingFang SC", sans-serif;
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --background: #171717;
+      --surface: #161616;
+      --raised: #222;
+      --hover: #2c2c2c;
+      --selected: #2d3034;
+      --text: #ededed;
+      --muted: #afafaf;
+      --border: #363636;
+      --control-border: #545454;
+      --primary: #f0f0f0;
+      --on-primary: #151515;
+      --blue: #3297ff;
+      --green: #6bdb64;
+      --amber: #f6c267;
+      --danger: #ff9d9d;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; background: var(--background); color: var(--text); }
+    h1, h2, p { margin: 0; }
+    button, input, select { font: inherit; }
+    button { color: inherit; cursor: pointer; }
+    button:disabled { cursor: default; opacity: .55; }
+    :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .icon { width: 1.25em; height: 1.25em; flex: none; vertical-align: middle; }
+    .icon-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+    .sr-only, .clipboard-buffer {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      padding: calc(12px + var(--safe-top, 0px)) calc(clamp(16px, 2.2vw, 34px) + var(--safe-right, 0px))
+        calc(24px + var(--safe-bottom, 0px)) calc(clamp(16px, 2.2vw, 34px) + var(--safe-left, 0px));
+    }
+    :root[data-display-mode="fullscreen"] { overflow: hidden; }
+    :root[data-display-mode="fullscreen"] .app { height: 100dvh; }
+    .masthead, .heading, .toolbar, .button, .actions, .log-header, .log-footer, .log-context {
+      display: flex;
+      align-items: center;
+    }
+    .masthead, .log-header, .log-footer, .log-context { justify-content: space-between; gap: 12px; }
+    .masthead { flex: none; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .masthead .counts, .project-heading .counts { flex: none; color: var(--muted); font-size: 13px; }
+    .masthead .counts { margin-inline-start: clamp(2px, 1vw, 18px); }
+    .heading { min-width: 0; gap: 11px; }
+    h1 { font-size: clamp(19px, 1.9vw, 26px); font-weight: 700; letter-spacing: -.025em; }
+    h2 { font-size: 18px; line-height: 1.25; font-weight: 700; letter-spacing: -.018em; }
+    .brand-icon {
+      display: grid;
+      width: 40px;
+      height: 36px;
+      flex: none;
+      place-items: center;
+      border: 1px solid var(--control-border);
+      border-radius: 8px;
+      background: var(--raised);
+    }
+    .brand-icon img { display: block; width: 22px; height: 22px; }
+    .button {
+      display: inline-flex;
+      justify-content: center;
+      min-height: 34px;
+      gap: 7px;
+      padding: 5px 12px;
+      border: 1px solid var(--control-border);
+      border-radius: 8px;
+      background: var(--raised);
+      white-space: nowrap;
+    }
+    .button:not(:disabled):hover { background: var(--hover); }
+    .button.primary { border-color: var(--primary); background: var(--primary); color: var(--on-primary); font-weight: 700; }
+    .button.primary:not(:disabled):hover { opacity: .88; background: var(--primary); }
+    .actions { gap: 8px; }
+
+    .board {
+      display: grid;
+      grid-template-columns: minmax(0, 1.47fr) minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr);
+      min-height: 0;
+      height: 580px;
+      flex: none;
+      gap: clamp(12px, 1.4vw, 22px);
+      margin-top: 16px;
+    }
+    :root[data-display-mode="fullscreen"] .board { height: auto; flex: 1; }
+    .workspace, .terminal { min-width: 0; min-height: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+      grid-template-rows: minmax(0, 1fr);
+    }
+    .project-panel, .script-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .project-panel { border-inline-end: 1px solid var(--border); padding: 12px 8px 8px; }
+    .project-heading { min-height: 31px; margin: 0 3px 10px; }
+    .project-heading h2 { font-size: clamp(17px, 1.65vw, 22px); }
+    .project-panel .search { flex: none; margin: 0 3px 10px; }
+    .search {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      flex: 1;
+      gap: 7px;
+      padding: 0 9px;
+      border: 1px solid var(--control-border);
+      border-radius: 7px;
+      background: var(--raised);
+      color: var(--muted);
+    }
+    .search:focus-within { outline: 2px solid var(--blue); outline-offset: 1px; }
+    .search input {
+      width: 100%;
+      min-width: 0;
+      height: 33px;
+      padding: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+    }
+    .search input::placeholder { color: var(--muted); }
+    .project-list {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-height: 0;
+      margin: 0;
+      padding: 2px 0;
+      overflow: auto;
+      overscroll-behavior: contain;
+      overflow-anchor: none;
+      list-style: none;
+    }
+    .project-button {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      min-width: 0;
+      gap: 8px;
+      min-height: 37px;
+      padding: 4px 8px 4px 10px;
+      border: 0;
+      border-inline-start: 3px solid transparent;
+      border-radius: 7px;
+      background: transparent;
+      text-align: start;
+    }
+    .project-button:hover { background: var(--hover); }
+    .project-button:focus-visible { outline-offset: -2px; }
+    .project-button[aria-pressed="true"] { border-inline-start-color: var(--blue); background: var(--selected); font-weight: 700; }
+    .project-button[data-missing] { color: var(--muted); }
+    .project-button .pin { width: 13px; height: 13px; }
+    .project-button .project-active {
+      width: 8px;
+      height: 8px;
+      flex: none;
+      margin-inline-start: auto;
+      border-radius: 50%;
+      background: var(--green);
+    }
+    .project-caption { color: var(--muted); font-size: 12px; padding: 8px 10px; }
+
+    .script-panel { padding: 0 9px; }
+    .scope-header {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 52px;
+      flex: none;
+      padding: 8px 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .scope-info { display: flex; align-items: center; min-width: 0; gap: 9px; }
+    .scope-info h2 { flex: none; max-inline-size: 58%; }
+    .scope-info .icon { width: 20px; height: 20px; }
+    .project-path { display: flex; min-width: 0; white-space: nowrap; color: var(--muted); font-size: 12px; }
+    .path-start { min-width: min(1em, 100%); }
+    .path-end { display: flex; justify-content: flex-end; min-width: 0; flex-shrink: .5; overflow: hidden; }
+    .path-end > span { flex: none; }
+    .toolbar { flex: none; flex-wrap: wrap; gap: 8px; padding: 9px 2px; }
+    .toolbar .search { min-width: 86px; }
+    .package-filter { position: relative; min-width: 82px; max-width: min(34%, 190px); }
+    .package-filter select {
+      appearance: none;
+      width: 100%;
+      height: 35px;
+      padding: 0 23px 0 8px;
+      overflow: hidden;
+      border: 1px solid var(--control-border);
+      border-radius: 7px;
+      background: var(--raised);
+      color: var(--text);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .package-filter .icon { position: absolute; inset-inline-end: 6px; top: 11px; width: 12px; height: 12px; pointer-events: none; }
+    .filters {
+      display: flex;
+      flex: none;
+      gap: 2px;
+      padding: 2px;
+      border: 1px solid var(--control-border);
+      border-radius: 7px;
+      background: var(--raised);
+    }
+    .filter {
+      min-width: 39px;
+      min-height: 29px;
+      padding: 2px 7px;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+    }
+    .filter[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); font-weight: 700; }
+
+    .table-frame { min-height: 0; overflow: auto; overscroll-behavior: contain; overflow-anchor: none; }
+    .scripts { width: 100%; border-spacing: 0; table-layout: fixed; }
+    .scripts col:nth-child(1) { width: 49%; }
+    .scripts col:nth-child(2) { width: 22%; }
+    .scripts col:nth-child(3) { width: auto; }
+    .scripts col:nth-child(4) { width: 40px; }
+    .scripts th, .scripts td { text-align: start; }
+    .scripts thead { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+    .scripts th { padding: 4px 6px 7px; font-weight: 500; }
+    .project-menu { position: relative; flex: none; }
+    .project-menu .button { min-height: 31px; }
+    .project-menu-options {
+      position: absolute;
+      z-index: 2;
+      inset-block-start: calc(100% + 4px);
+      inset-inline-end: 0;
+      min-width: 128px;
+      padding: 4px;
+      background: var(--raised);
+      border: 1px solid var(--control-border);
+      border-radius: 8px;
+      box-shadow: 0 6px 16px #0003;
+    }
+    .project-menu-options button {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      gap: 8px;
+      padding: 6px 9px;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      text-align: start;
+      white-space: nowrap;
+    }
+    .project-menu-options button:hover { background: var(--hover); }
+    .script-row { cursor: pointer; }
+    .script-row td { height: 37px; padding: 3px 6px; }
+    .script-row:hover td, .script-row:has(:focus-visible) td { background: var(--hover); }
+    .script-row td:first-child { border-start-start-radius: 6px; border-end-start-radius: 6px; }
+    .script-row td:last-child { border-start-end-radius: 6px; border-end-end-radius: 6px; text-align: end; }
+    .script-select { display: grid; width: 100%; min-width: 0; padding: 2px 0; border: 0; background: transparent; text-align: start; }
+    .script-select:focus-visible { outline-offset: 0; }
+    .script-main { display: flex; align-items: baseline; min-width: 0; gap: 7px; }
+    .script-name { flex: none; max-width: 100%; font-weight: 700; }
+    .script-name:not(:last-child) { max-width: 63%; }
+    .package-name { display: block; }
+    .command, .terminal-output { font-family: var(--mono); }
+    .command, .script-project { color: var(--muted); font-size: 11px; }
+    .status { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; gap: 6px; font-size: 12px; }
+    .status::before { content: ""; width: 8px; height: 8px; flex: none; border-radius: 50%; background: currentColor; }
+    .status[data-kind="active"], .status[data-kind="succeeded"] { color: var(--green); }
+    .status[data-kind="stopping"] { color: var(--amber); }
+    .status[data-kind="failed"] { color: var(--danger); }
+    .status[data-kind="idle"], .status[data-kind="stopped"] { color: var(--muted); }
+    .script-action { width: 30px; max-width: 100%; min-height: 28px; padding: 0; }
+    .script-action .icon { width: 15px; height: 15px; }
+    .empty { padding: 12px 16px; }
+    .terminal { display: flex; flex-direction: column; }
+
+    .terminal[hidden] { display: none; }
+    .log-header, .log-context, .log-footer { padding: 8px 12px; background: var(--raised); }
+    .log-header { border-radius: 9px 9px 0 0; }
+    .log-header .heading { gap: 8px; }
+    .log-header .brand-icon { width: 33px; height: 31px; }
+    .log-header .brand-icon img { width: 18px; height: 18px; }
+    .log-header .button { min-height: 31px; }
+    .log-header .icon-button { padding-inline: 8px; gap: 0; }
+    .log-header .icon-button[data-copied="true"] { color: var(--green); }
+    .log-context { border-top: 1px solid var(--border); }
+    .log-title { font-size: 16px; font-weight: 700; }
+    .log-detail, .line-count { color: var(--muted); font-size: 12px; }
+    .terminal-output {
+      flex: 1;
+      min-height: 0;
+      margin: 0;
+      padding: 12px 14px;
+      overflow: auto;
+      overscroll-behavior: contain;
+      border-block: 1px solid var(--border);
+      white-space: pre;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .terminal-output[data-empty] { color: var(--muted); white-space: pre-wrap; }
+    .log-footer { border-radius: 0 0 9px 9px; }
+    .scroll-switch { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 13px; user-select: none; }
+    .scroll-switch input {
+      appearance: none;
+      position: relative;
+      width: 30px;
+      height: 16px;
+      margin: 0;
+      border-radius: 12px;
+      background: var(--control-border);
+      cursor: pointer;
+    }
+    .scroll-switch input::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #fff;
+    }
+    .scroll-switch input:checked { background: var(--blue); }
+    .scroll-switch input:checked::after { translate: 14px; }
+    .alert, .welcome { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); }
+    .alert { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--danger); }
+    .welcome p { margin-top: 4px; color: var(--muted); }
+
+    @media (max-width: 1000px) {
+      .board {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1.15fr) minmax(0, 1fr);
+        height: 740px;
+      }
+      .workspace { grid-template-columns: minmax(0, .38fr) minmax(0, 1fr); }
+    }
+    @media (max-width: 560px) {
+      .app { padding-inline: calc(9px + var(--safe-left, 0px)) calc(9px + var(--safe-right, 0px)); }
+      .masthead { flex-wrap: wrap; row-gap: 5px; }
+      .masthead .heading { gap: 7px; }
+      .masthead .brand-icon { width: 32px; height: 30px; }
+      .masthead .brand-icon img { width: 18px; height: 18px; }
+      .masthead .button { padding-inline: 7px; }
+      .masthead .actions { margin-inline-start: auto; }
+      .masthead .counts { font-size: 12px; }
+      .workspace { grid-template-columns: minmax(105px, .45fr) minmax(0, 1fr); }
+      .project-panel { padding: 8px 4px 4px; }
+      .project-heading { gap: 5px; margin-bottom: 5px; }
+      .project-heading h2 { font-size: 16px; }
+      .project-button { gap: 5px; min-height: 33px; padding-inline: 3px; font-size: 12px; }
+      .script-panel { padding-inline: 5px; }
+      .scope-info { gap: 5px; }
+      .scope-info h2 { max-inline-size: 68%; font-size: 15px; }
+      .scope-info .icon { width: 15px; height: 15px; }
+      .scope-header .button { padding-inline: 6px; min-height: 27px; font-size: 12px; }
+      .search, .toolbar { gap: 5px; }
+      .search { padding-inline: 5px; }
+      .search input { font-size: 12px; }
+      .toolbar .search { flex-basis: 100%; }
+      .package-filter { max-width: min(58%, 170px); flex: 1; }
+      .package-filter select { height: 31px; font-size: 12px; }
+      .package-filter .icon { top: 9px; }
+      .filter { min-width: 32px; min-height: 25px; padding-inline: 4px; font-size: 12px; }
+      .scripts col:nth-child(1) { width: 43%; }
+      .scripts col:nth-child(2) { width: 24%; }
+      .scripts col:nth-child(4) { width: 28px; }
+      .scripts th, .script-row td { padding-inline: 3px; font-size: 11px; }
+      .script-main { flex-direction: column; gap: 0; }
+      .script-name:not(:last-child), .script-main .command { max-width: 100%; }
+      .script-action { width: 24px; min-height: 24px; }
+      .script-action .icon { width: 13px; height: 13px; }
+      .status { gap: 3px; font-size: 11px; }
+      .status::before { width: 6px; height: 6px; }
+    }
+    @media (max-width: 380px) {
+      .scope-info .project-path { display: none; }
+      .scope-info h2 { max-inline-size: 100%; }
+      .log-header, .log-context, .log-footer { padding-inline: 8px; }
+      .log-header .actions { gap: 4px; }
+      .log-header .button { padding-inline: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Action glyphs from Ionicons (MIT). -->
+<svg class="icon-definitions" aria-hidden="true">
+    <symbol id="i-layers" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"><path d="M256 48 32 176l224 128 224-128L256 48zM32 256l224 128 224-128M32 336l224 128 224-128"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M288 64 448 224l-48 16-64 64-16 80-192-192 80-16 64-64 16-48ZM224 288 64 448"/></symbol>
+    <symbol id="i-add" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M256 112v288m144-144H112"/></symbol>
+    <symbol id="i-arrow-down" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M112 268l144 144l144-144M256 392V100"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M112 184l144 144l144-144"/></symbol>
+    <symbol id="i-code" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M160 368L32 256l128-112m192 224l128-112l-128-112M304 96l-96 320"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><rect x="128" y="128" width="336" height="336" rx="57"/><path d="M383.5 128l.5-24a56.16 56.16 0 0 0-56-56H112a64.19 64.19 0 0 0-64 64v216a56.16 56.16 0 0 0 56 56h24"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M440 432H72a40 40 0 0 1-40-40V120a40 40 0 0 1 40-40h75.89a40 40 0 0 1 22.19 6.72l27.84 18.56a40 40 0 0 0 22.19 6.72H440a40 40 0 0 1 40 40v240a40 40 0 0 1-40 40zM32 192h448"/></symbol>
+    <symbol id="i-play" viewBox="0 0 512 512" fill="currentColor"><path d="M133 440a21 21 0 0 1-21-21V93a21 21 0 0 1 33-17l256 163a20 20 0 0 1 0 34L145 437a21 21 0 0 1-12 3Z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M320 146s24.36-12-64-12a160 160 0 1 0 160 160M256 58l80 80l-80 80"/></symbol>
+    <symbol id="i-search" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M221.09 64a157.09 157.09 0 1 0 157.09 157.09A157.1 157.1 0 0 0 221.09 64zM338.29 338.29L448 448"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 512 512" fill="currentColor"><rect x="80" y="80" width="352" height="352" rx="32"/></symbol>
+  </svg>
+  <main class="app" id="app">
+    <header class="masthead">
+      <div class="heading">
+        <span class="brand-icon"><img data-brand-icon alt=""></span>
+        <h1 data-text="title">Script Manager</h1>
+        <p class="counts" id="counts"></p>
+      </div>
+      <div class="actions">
+        <button class="button" id="scan" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span>Rescan</span></button>
+        <button class="button primary" id="add-project" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#i-add"/></svg><span>Open Project</span></button>
+      </div>
+    </header>
+
+    <div class="alert" id="error" hidden>
+      <p id="error-text" role="alert"></p>
+      <button class="button" id="retry" type="button">Reconnect</button>
+    </div>
+
+    <section class="welcome" id="welcome" aria-labelledby="welcome-title" role="status">
+      <h2 id="welcome-title">Connecting to Script Manager</h2>
+      <p id="welcome-text">Reading local projects.</p>
+    </section>
+
+    <div class="board" id="dashboard" hidden>
+      <div class="workspace">
+        <section class="project-panel" aria-labelledby="projects-heading">
+          <div class="heading project-heading">
+            <h2 id="projects-heading" data-text="projects">Projects</h2>
+            <p class="counts" id="project-count"></p>
+          </div>
+          <label class="search">
+            <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+            <input id="project-search" type="search" placeholder="Find a project" aria-label="Find a project">
+          </label>
+          <ul class="project-list" id="project-list" aria-labelledby="projects-heading"></ul>
+        </section>
+
+        <section class="script-panel" aria-labelledby="scope-title">
+          <header class="scope-header">
+            <div class="scope-info" id="scope-info"></div>
+            <div class="scope-controls" id="scope-controls"></div>
+          </header>
+          <div class="toolbar">
+            <label class="search">
+              <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+              <input id="script-search" type="search" placeholder="Search scripts" aria-label="Search scripts">
+            </label>
+            <label class="package-filter">
+              <select id="package-filter" aria-label="Filter by package"></select>
+              <svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>
+            </label>
+            <div class="filters" id="filters" role="group" aria-label="Filter scripts by status">
+              <button class="filter" id="filter-all" type="button" aria-pressed="true" data-text="all">All</button>
+              <button class="filter" id="filter-active" type="button" aria-pressed="false" data-text="active">Active</button>
+            </div>
+          </div>
+          <div class="table-frame" id="script-list" role="region" aria-labelledby="scope-title" tabindex="0">
+            <table class="scripts" id="scripts">
+              <colgroup><col><col><col><col></colgroup>
+              <thead>
+                <tr>
+                  <th scope="col" data-text="script">Script</th>
+                  <th scope="col" data-text="package">Package</th>
+                  <th scope="col" data-text="status">Status</th>
+                  <th scope="col"><span class="sr-only" data-text="action">Action</span></th>
+                </tr>
+              </thead>
+              <tbody id="script-rows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <section class="terminal" aria-labelledby="log-heading">
+        <div class="log-header">
+          <div class="heading">
+            <span class="brand-icon"><img data-brand-icon alt=""></span>
+            <h2 id="log-heading" data-text="logs">Logs</h2>
+          </div>
+          <div class="actions">
+            <button class="button icon-button" id="log-copy" type="button" aria-label="Copy logs" title="Copy logs" disabled><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg></button>
+            <button class="button" id="log-bottom" type="button" disabled><span data-text="jumpToEnd">Jump to end</span><svg class="icon" aria-hidden="true"><use href="#i-arrow-down"/></svg></button>
+          </div>
+        </div>
+        <div class="log-context" id="log-context" hidden>
+          <div class="truncate">
+            <p class="log-title truncate" id="log-title"></p>
+          </div>
+          <span class="status" id="log-status"></span>
+        </div>
+        <pre class="terminal-output" id="log" aria-label="Script logs" tabindex="0" data-empty>Select a script to view its logs.</pre>
+        <div class="log-footer">
+          <label class="scroll-switch"><input type="checkbox" role="switch" id="log-auto" checked><span data-text="autoScroll">Auto-scroll</span></label>
+          <span class="line-count" id="log-lines">0 lines</span>
+        </div>
+        <span class="sr-only" id="copy-feedback" role="status"></span>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    "use strict";
+
+    const toolPrefix = "script_manager";
+    const preferenceKey = "script-manager-mcp.selection";
+    const peer = window.parent;
+    const requests = new Map();
+    const browserTheme = window.matchMedia("(prefers-color-scheme: dark)");
+    const messages = {
+      en: {
+        title: "Script Manager",
+        projects: "Projects",
+        projectSearch: "Find a project",
+        scriptSearch: "Search scripts",
+        filters: "Filter scripts by status",
+        allProjects: "All projects",
+        packageFilter: "Filter by package",
+        allPackages: "All packages",
+        rootPackage: "Root",
+        pinned: "Pinned project",
+        script: "Script",
+        package: "Package",
+        status: "Status",
+        action: "Action",
+        all: "All",
+        active: "Active",
+        oneProject: "{value} project",
+        projectCount: "{value} projects",
+        oneScript: "{value} script",
+        scriptCount: "{value} scripts",
+        activeProject: "Active scripts",
+        logs: "Logs",
+        scriptLogs: "Script logs",
+        copyLogs: "Copy logs",
+        copied: "Logs copied",
+        copyFailed: "Could not copy logs.",
+        jumpToEnd: "Jump to end",
+        autoScroll: "Auto-scroll",
+        oneLine: "{value} line",
+        lineCount: "{value} lines",
+        openProject: "Open Project",
+        openIn: "Open in",
+        openInProject: "Open {value} in",
+        waitingForFolder: "Waiting for folder…",
+        selectProject: "Open a project",
+        selectProjectHint: "Choose a local project folder to scan for runnable scripts.",
+        selectFolderHint: "Continue in the macOS folder picker.",
+        connecting: "Connecting to Script Manager",
+        loadingProjects: "Reading local projects.",
+        unavailable: "Connection unavailable",
+        projectUnavailable: "This project folder is unavailable.",
+        reconnectHint: "Try reconnecting to the local Script Manager.",
+        refreshStatus: "Refresh status",
+        reconnect: "Reconnect",
+        rescan: "Rescan",
+        scanning: "Scanning…",
+        scanningFiles: "Scanning project files…",
+        noScripts: "No runnable Node.js or Spring Boot scripts found.",
+        noProjects: "No matching projects.",
+        noMatches: "No scripts match the filters.",
+        noActive: "No active scripts.",
+        selectScript: "Select a script to view its logs.",
+        noLogs: "No logs yet.",
+        loadingLogs: "Reading logs…",
+        idle: "Idle",
+        stopping: "Stopping",
+        stopped: "Stopped",
+        succeeded: "Passed",
+        failed: "Start failed",
+        exitCode: "Exit code {value}",
+        start: "Run",
+        stop: "Stop",
+        starting: "Starting…",
+        stoppingAction: "Stopping…",
+        timeout: "Script Manager connection timed out.",
+        responseError: "Script Manager returned an error.",
+        openInCodex: "Open Script Manager in Codex.",
+        noHandshake: "Codex did not confirm the Script Manager connection.",
+        operationError: "The Script Manager operation failed.",
+        invalidSnapshot: "Could not read Script Manager data.",
+        closed: "Script Manager was closed."
+      },
+      "zh-CN": {
+        title: "脚本管理",
+        projects: "项目",
+        projectSearch: "搜索项目",
+        scriptSearch: "搜索脚本",
+        filters: "按状态筛选脚本",
+        allProjects: "全部项目",
+        packageFilter: "按包筛选",
+        allPackages: "全部包",
+        rootPackage: "根目录",
+        pinned: "已置顶",
+        script: "脚本",
+        package: "所属包",
+        status: "状态",
+        action: "操作",
+        all: "全部",
+        active: "运行中",
+        oneProject: "{value} 个项目",
+        projectCount: "{value} 个项目",
+        oneScript: "{value} 个脚本",
+        scriptCount: "{value} 个脚本",
+        activeProject: "有脚本正在运行",
+        logs: "日志",
+        scriptLogs: "脚本日志",
+        copyLogs: "复制日志",
+        copied: "日志已复制",
+        copyFailed: "无法复制日志。",
+        jumpToEnd: "跳到末尾",
+        autoScroll: "自动滚动",
+        oneLine: "{value} 行",
+        lineCount: "{value} 行",
+        openProject: "打开项目",
+        openIn: "打开方式",
+        openInProject: "选择打开「{value}」的应用",
+        waitingForFolder: "等待选择文件夹…",
+        selectProject: "打开一个项目",
+        selectProjectHint: "选择本地项目文件夹，扫描可运行的脚本。",
+        selectFolderHint: "请在 macOS 文件夹选择窗口中继续。",
+        connecting: "正在连接脚本管理",
+        loadingProjects: "正在读取本地项目。",
+        unavailable: "连接不可用",
+        projectUnavailable: "该项目文件夹不可用。",
+        reconnectHint: "可以重新连接本地脚本管理。",
+        refreshStatus: "刷新状态",
+        reconnect: "重新连接",
+        rescan: "重新扫描",
+        scanning: "扫描中…",
+        scanningFiles: "正在扫描项目文件…",
+        noScripts: "未找到可运行的 Node.js 或 Spring Boot 脚本。",
+        noProjects: "没有符合条件的项目。",
+        noMatches: "没有符合筛选条件的脚本。",
+        noActive: "没有运行中的脚本。",
+        selectScript: "选择一个脚本以查看日志。",
+        noLogs: "暂无日志。",
+        loadingLogs: "正在读取日志…",
+        idle: "未运行",
+        stopping: "停止中",
+        stopped: "已停止",
+        succeeded: "成功",
+        failed: "启动失败",
+        exitCode: "退出码 {value}",
+        start: "运行",
+        stop: "停止",
+        starting: "启动中…",
+        stoppingAction: "停止中…",
+        timeout: "脚本管理连接超时。",
+        responseError: "脚本管理返回错误。",
+        openInCodex: "请在 Codex 中打开脚本管理。",
+        noHandshake: "Codex 未确认脚本管理连接。",
+        operationError: "脚本管理操作失败。",
+        invalidSnapshot: "无法读取脚本管理数据。",
+        closed: "脚本管理面板已关闭。"
+      }
+    };
+    const ids = [
+      "app", "add-project", "scan", "error", "error-text", "retry", "welcome",
+      "welcome-title", "welcome-text", "dashboard", "counts", "project-count",
+      "project-search", "project-list", "scope-info", "scope-controls", "script-search",
+      "filters", "filter-all", "filter-active", "package-filter", "script-list", "script-rows",
+      "log", "log-context", "log-title", "log-status", "log-lines", "log-auto",
+      "log-copy", "log-bottom", "copy-feedback"
+    ];
+    const ui = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
+    const brandIcons = document.querySelectorAll("[data-brand-icon]");
+    const brandSources = { light: "__SCRIPT_MANAGER_ICON_LIGHT__", dark: "__SCRIPT_MANAGER_ICON_DARK__" };
+    const state = {
+      status: "idle",
+      snapshot: null,
+      selection: {},
+      scopeProjectId: null,
+      remembered: readPreference(),
+      revision: 0,
+      action: null,
+      transportError: null,
+      actionError: null,
+      busy: false,
+      timer: 0,
+      projectQuery: "",
+      scriptQuery: "",
+      packageFilter: "",
+      activeOnly: false,
+      menuProjectId: null,
+      copyTimer: 0
+    };
+    let nextId = 0;
+    let origin;
+    let hostContext = {};
+    let documentLocale = document.documentElement.lang;
+    let locale;
+    let lastHeight;
+    let lastProjectList;
+    let lastScope;
+    let lastPackages;
+    let lastScripts;
+    let lastSelectedScript;
+    let lastLogId;
+    let lastLogText;
+
+    function t(key, value) {
+      return messages[locale][key].replace("{value}", () => String(value));
+    }
+
+    function quantity(value, singular, plural) {
+      return t(value === 1 ? singular : plural, new Intl.NumberFormat(locale).format(value));
+    }
+
+    class LocalizedError extends Error {
+      constructor(key, detail, detailLocale = locale) {
+        super();
+        this.key = key;
+        this.detail = typeof detail === "string" ? detail : "";
+        this.detailLocale = detailLocale;
+      }
+
+      get message() {
+        return (locale === this.detailLocale && this.detail) || t(this.key);
+      }
+    }
+
+    function applyLocale() {
+      const preferred = hostContext.locale || documentLocale || navigator.language;
+      const next = /^zh(?:[-_]|$)/i.test(preferred) ? "zh-CN" : "en";
+      if (document.documentElement.lang !== next) document.documentElement.lang = next;
+      if (locale === next) return;
+
+      locale = next;
+      document.title = t("title");
+      for (const element of document.querySelectorAll("[data-text]")) setText(element, t(element.dataset.text));
+      ui.log.setAttribute("aria-label", t("scriptLogs"));
+      for (const [id, label] of [["project-search", "projectSearch"], ["script-search", "scriptSearch"]]) {
+        ui[id].setAttribute("aria-label", t(label));
+        ui[id].placeholder = t(label);
+      }
+      ui["package-filter"].setAttribute("aria-label", t("packageFilter"));
+      ui.filters.setAttribute("aria-label", t("filters"));
+      updateCopyFeedback("");
+      render();
+      schedule(0);
+    }
+
+    function readPreference() {
+      try {
+        const value = JSON.parse(window.localStorage.getItem(preferenceKey));
+        return value && typeof value === "object" ? value : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function rememberSelection() {
+      try {
+        window.localStorage.setItem(preferenceKey, JSON.stringify({
+          ...state.selection, scopeProjectId: state.scopeProjectId
+        }));
+      } catch {
+        // Some embedded hosts deny browser storage.
+      }
+    }
+
+    function send(message) {
+      const target = /^https?:\/\//.test(origin ?? "") ? origin : "*";
+      peer.postMessage({ jsonrpc: "2.0", ...message }, target);
+    }
+
+    function request(method, params, timeout = 12000) {
+      return new Promise((resolve, reject) => {
+        const id = ++nextId;
+        const timer = setTimeout(() => {
+          requests.delete(id);
+          reject(new LocalizedError("timeout"));
+        }, timeout);
+        requests.set(id, { method, resolve, reject, timer, locale });
+        try {
+          send({ id, method, params });
+        } catch (error) {
+          requests.delete(id);
+          clearTimeout(timer);
+          reject(error);
+        }
+      });
+    }
+
+    function applyHostContext(delta) {
+      hostContext = { ...hostContext, ...delta };
+      document.documentElement.dataset.displayMode = hostContext.displayMode === "fullscreen" ? "fullscreen" : "inline";
+      applyTheme();
+      applyLocale();
+      for (const side of ["top", "right", "bottom", "left"]) {
+        const value = hostContext.safeAreaInsets?.[side];
+        if (Number.isFinite(value)) ui.app.style.setProperty("--safe-" + side, Math.max(0, value) + "px");
+      }
+      reportSize();
+    }
+
+    function applyTheme() {
+      const theme = hostContext.theme === "dark" || (
+        hostContext.theme !== "light" && browserTheme.matches
+      ) ? "dark" : "light";
+      document.documentElement.dataset.theme = theme;
+      for (const image of brandIcons) {
+        if (image.getAttribute("src") !== brandSources[theme]) image.src = brandSources[theme];
+      }
+    }
+
+    function reportSize() {
+      if (state.status !== "ready" || hostContext.displayMode === "fullscreen") return;
+      const height = Math.ceil(ui.app.getBoundingClientRect().height);
+      if (height === lastHeight) return;
+      lastHeight = height;
+      send({ method: "ui/notifications/size-changed", params: { height } });
+    }
+
+    function onMessage(event) {
+      const message = event.data;
+      if (event.source !== peer || message?.jsonrpc !== "2.0" || (origin !== undefined && origin !== event.origin)) return;
+      if (!message.method) {
+        const pending = requests.get(message.id);
+        if (!pending) return;
+        requests.delete(message.id);
+        clearTimeout(pending.timer);
+        if (message.error) {
+          pending.reject(new LocalizedError("responseError", message.error.message, pending.locale));
+        } else {
+          if (pending.method === "ui/initialize" && message.result?.protocolVersion) origin = event.origin;
+          pending.resolve(message.result);
+        }
+        return;
+      }
+
+      switch (message.method) {
+      case "ui/notifications/host-context-changed":
+        applyHostContext(message.params);
+        break;
+      case "ping":
+      case "ui/resource-teardown":
+        if (message.id !== undefined) send({ id: message.id, result: {} });
+        if (message.method === "ui/resource-teardown") dispose();
+        break;
+      }
+    }
+
+    async function connect() {
+      if (state.status !== "idle") return;
+      state.status = "connecting";
+      state.transportError = null;
+      render();
+      try {
+        if (peer === window) throw new LocalizedError("openInCodex");
+        const host = await request("ui/initialize", {
+          protocolVersion: "2026-01-26",
+          appInfo: { name: "script-manager", version: "__SCRIPT_MANAGER_VERSION__" },
+          appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] }
+        }, 8000);
+        if (!host?.protocolVersion) throw new LocalizedError("noHandshake");
+        if (state.status === "closed") return;
+        applyHostContext(host.hostContext);
+        send({ method: "ui/notifications/initialized" });
+        state.status = "ready";
+        reportSize();
+        schedule(0);
+      } catch (error) {
+        if (state.status === "closed") return;
+        state.status = "idle";
+        state.transportError = error;
+      }
+      render();
+    }
+
+    function parseSnapshot(result, requestLocale) {
+      const summary = result?.content?.find((part) => part.type === "text")?.text;
+      if (result?.isError) throw new LocalizedError("operationError", summary, requestLocale);
+
+      let value = result?.structuredContent;
+      if (!value && summary) {
+        try {
+          value = JSON.parse(summary);
+        } catch {
+          throw new LocalizedError("invalidSnapshot");
+        }
+      }
+      if (!Array.isArray(value?.projects) || !Array.isArray(value?.tasks)) throw new LocalizedError("invalidSnapshot");
+      return value;
+    }
+
+    function projectTasks(data, project) {
+      if (Array.isArray(project.tasks)) return project.tasks;
+      return project.id === data.projectId ? data.tasks : [];
+    }
+
+    function selectedTask(data) {
+      if (!data) return {};
+      const project = data.projects.find(({ id }) => id === state.selection.projectId);
+      if (!project) return {};
+      const task = projectTasks(data, project).find(({ id }) => id === state.selection.taskId);
+      return { project, task };
+    }
+
+    function selectTaskForScope(data, previous) {
+      const scoped = data.projects.find(({ id }) => id === state.scopeProjectId);
+      const selected = data.projects.find(({ id }) => id === previous.projectId);
+      const project = scoped ?? selected;
+      const candidate = project && projectTasks(data, project);
+      const preferred = project?.id === previous.projectId
+        && candidate?.find(({ id }) => id === previous.taskId);
+
+      if (preferred || project?.scanning) {
+        setSelection(project.id, preferred?.id ?? (project.id === previous.projectId ? previous.taskId : undefined));
+        return;
+      }
+
+      const target = project && (scoped || candidate.length)
+        ? project
+        : data.projects.find((item) => item.id === data.selectedProjectId && projectTasks(data, item).length)
+          ?? data.projects.find((item) => projectTasks(data, item).length);
+      if (!target) {
+        setSelection();
+        return;
+      }
+      const tasks = projectTasks(data, target);
+      const task = tasks.find(({ id }) => target.id === data.projectId && id === data.selectedTaskId) ?? tasks[0];
+      setSelection(target.id, task?.id);
+    }
+
+    function adoptSnapshot(next) {
+      const pickerFinished = state.snapshot?.pickPending && !next.pickPending;
+      const previouslySelected = state.snapshot?.selectedProjectId;
+      state.snapshot = next;
+      const remembered = state.remembered;
+      state.remembered = null;
+      let selection = remembered || state.selection;
+      if (remembered && next.projects.some(({ id }) => id === remembered.scopeProjectId)) {
+        state.scopeProjectId = remembered.scopeProjectId;
+      }
+      if (pickerFinished && next.selectedProjectId !== previouslySelected
+          && next.projects.some(({ id }) => id === next.selectedProjectId)) {
+        state.scopeProjectId = next.selectedProjectId;
+        state.packageFilter = "";
+        selection = { projectId: next.selectedProjectId };
+      }
+      if (state.scopeProjectId && !next.projects.some(({ id }) => id === state.scopeProjectId)) {
+        state.scopeProjectId = null;
+        state.packageFilter = "";
+      }
+      selectTaskForScope(next, selection);
+      if (pickerFinished) rememberSelection();
+    }
+
+    function schedule(delay) {
+      clearTimeout(state.timer);
+      if (state.status !== "ready" || state.busy || (document.hidden && !state.action)) return;
+      state.timer = setTimeout(synchronize, delay);
+    }
+
+    async function synchronize() {
+      if (state.status !== "ready" || state.busy) return;
+      state.busy = true;
+      const action = state.action;
+      const revision = state.revision;
+      const requestLocale = locale;
+      try {
+        const operation = action?.name ?? "snapshot";
+        const args = action?.args ?? Object.fromEntries(
+          Object.entries(state.selection).filter(([, value]) => value)
+        );
+        const response = await request("tools/call", {
+          name: toolPrefix + "_" + operation,
+          arguments: { ...args, locale: requestLocale }
+        });
+        if (state.status === "closed") return;
+        const next = parseSnapshot(response, requestLocale);
+        state.transportError = null;
+        if (revision === state.revision) adoptSnapshot(next);
+      } catch (error) {
+        if (state.status !== "closed") {
+          if (action) state.actionError = error;
+          else state.transportError = error;
+        }
+      } finally {
+        state.busy = false;
+        if (action === state.action) state.action = null;
+        if (state.status !== "closed") {
+          render();
+          const lively = state.snapshot?.pickPending ||
+            state.snapshot?.projects.some((project) => project.activeCount > 0 || project.scanning);
+          const delay = action || state.action || revision !== state.revision || locale !== requestLocale ? 0
+            : state.transportError ? 4000 : lively ? 800 : 2300;
+          schedule(delay);
+        }
+      }
+    }
+
+    function setSelection(projectId, taskId) {
+      if (projectId === state.selection.projectId && taskId === state.selection.taskId) return;
+      state.selection = { projectId, taskId };
+      state.revision++;
+      rememberSelection();
+    }
+
+    function chooseProject(projectId) {
+      if (projectId === state.scopeProjectId) return;
+      state.scopeProjectId = projectId;
+      state.packageFilter = "";
+      state.menuProjectId = null;
+      state.actionError = null;
+      ui["script-list"].scrollTop = 0;
+      selectTaskForScope(state.snapshot, state.selection);
+      rememberSelection();
+      render();
+      schedule(0);
+    }
+
+    function choose(projectId, taskId) {
+      setSelection(projectId, taskId);
+      state.actionError = null;
+      render();
+      schedule(0);
+    }
+
+    function queueAction(name, args = {}) {
+      if (state.status !== "ready" || state.action || state.snapshot?.pickPending) return;
+      state.actionError = null;
+      state.action = { name, args };
+      render();
+      schedule(0);
+    }
+
+    function setText(element, text) {
+      if (element.textContent !== text) element.textContent = text;
+    }
+
+    function node(tag, className, text) {
+      const element = document.createElement(tag);
+      if (className) element.className = className;
+      if (text) element.textContent = text;
+      return element;
+    }
+
+    function icon(name, className = "") {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      const use = document.createElementNS(svg.namespaceURI, "use");
+      svg.setAttribute("class", "icon " + className);
+      svg.setAttribute("aria-hidden", "true");
+      use.setAttribute("href", "#i-" + name);
+      svg.append(use);
+      return svg;
+    }
+
+    function button(className, label, id, onClick) {
+      const element = node("button", className, label);
+      element.type = "button";
+      element.dataset.focusKey = JSON.stringify(id);
+      element.addEventListener("click", onClick);
+      return element;
+    }
+
+    function taskKind(task) {
+      return task.stopping ? "stopping" : task.active ? "active" : task.statusKind || "idle";
+    }
+
+    function taskStatus(task) {
+      const kind = taskKind(task);
+      if (kind === "failed") {
+        if (Number.isInteger(task.exitCode)) return t("exitCode", task.exitCode);
+        return task.exitCode === undefined && task.status ? task.status : t("failed");
+      }
+      return t(["active", "stopping", "stopped", "succeeded"].includes(kind) ? kind : "idle");
+    }
+
+    function taskPackage(task) {
+      const detailPath = typeof task.detail === "string" ? task.detail.split(" · ").at(-1) : "";
+      const path = typeof task.packagePath === "string" ? task.packagePath
+        : (detailPath?.includes("/") || task.detail?.endsWith(" · " + detailPath) && !detailPath.startsWith("JDWP "))
+          ? detailPath : "";
+      return { path, name: task.packageName || path.split("/").at(-1) || t("rootPackage") };
+    }
+
+    function scriptRow(project, task, waiting) {
+      const row = node("tr", "script-row");
+      const select = button("script-select", "", ["log", project.id, task.id], () => choose(project.id, task.id));
+      select.setAttribute("aria-pressed", "false");
+      select.title = task.command || task.name;
+      const taskLabel = node("span", "script-main");
+      taskLabel.append(node("span", "script-name truncate", task.name));
+      if (task.command) taskLabel.append(node("span", "command truncate", task.command));
+      select.append(taskLabel);
+      if (!state.scopeProjectId) select.append(node("span", "script-project truncate", project.name));
+      const nameCell = node("td");
+      nameCell.append(select);
+      const group = taskPackage(task);
+      const packageCell = node("td");
+      const packageName = node("span", "package-name truncate", group.name);
+      packageName.title = group.path ? group.name + " · " + group.path : group.name;
+      packageCell.append(packageName);
+      const statusCell = node("td");
+      const status = node("span", "status", taskStatus(task));
+      status.dataset.kind = taskKind(task);
+      statusCell.append(status);
+
+      const stopping = task.active || task.stopping;
+      const operation = stopping ? "stop" : "start";
+      const pending = state.action?.name === operation && state.action.args.projectId === project.id &&
+        state.action.args.taskId === task.id;
+      const label = t(pending ? (stopping ? "stoppingAction" : "starting") : operation);
+      const run = button("button script-action", "", ["run", project.id, task.id], () => {
+        setSelection(project.id, task.id);
+        queueAction(operation, { projectId: project.id, taskId: task.id });
+      });
+      run.setAttribute("aria-label", label + " " + task.name);
+      run.title = label;
+      run.append(icon(stopping ? "stop" : "play"));
+      run.disabled = waiting || Boolean(task.stopping) || (project.available === false && !stopping);
+      const action = node("td");
+      action.append(run);
+      row.addEventListener("click", (event) => {
+        if (!event.target.closest("button")) choose(project.id, task.id);
+      });
+      row.append(nameCell, packageCell, statusCell, action);
+      return row;
+    }
+
+    function setMenu(projectId) {
+      state.menuProjectId = projectId;
+      render();
+    }
+
+    function projectMenu(project, waiting) {
+      const menu = node("div", "project-menu");
+      const isOpen = state.menuProjectId === project.id && !waiting && project.available !== false;
+      const toggle = button("button", t("openIn"), ["open-in", project.id],
+        () => setMenu(isOpen ? null : project.id));
+      toggle.setAttribute("aria-label", t("openInProject", project.name));
+      toggle.setAttribute("aria-expanded", String(isOpen));
+      toggle.disabled = waiting || project.available === false;
+      toggle.append(icon("chevron"));
+      menu.append(toggle);
+      if (!isOpen) return menu;
+
+      const options = node("div", "project-menu-options");
+      for (const [destination, name, symbol] of [["finder", "Finder", "folder"], ["vscode", "VS Code", "code"]]) {
+        const item = button("", "", [destination, project.id], () => {
+          state.menuProjectId = null;
+          queueAction("open", { projectId: project.id, destination });
+        });
+        item.append(icon(symbol), document.createTextNode(name));
+        options.append(item);
+      }
+      menu.append(options);
+      return menu;
+    }
+
+    function textMatches(query, ...values) {
+      return !query || values.some((value) =>
+        typeof value === "string" && value.toLocaleLowerCase(locale).includes(query));
+    }
+
+    function focusedKey(container) {
+      return container.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+    }
+
+    function findFocus(container, key) {
+      return Array.from(container.querySelectorAll("button"))
+        .find((element) => element.dataset.focusKey === key && !element.disabled);
+    }
+
+    function projectItem(project) {
+      const item = node("li");
+      const id = project?.id ?? null;
+      const name = project?.name || t("allProjects");
+      const select = button("project-button", "", ["project", id], () => chooseProject(id));
+      select.setAttribute("aria-pressed", String(state.scopeProjectId === id));
+      select.title = project?.path || name;
+      select.toggleAttribute("data-missing", project?.available === false);
+      select.append(icon(project ? "folder" : "layers"), node("span", "truncate", name));
+      if (project?.pinned) {
+        select.append(icon("pin", "pin"), node("span", "sr-only", t("pinned")));
+      }
+      if (project?.activeCount > 0) {
+        const active = node("span", "project-active");
+        active.setAttribute("aria-hidden", "true");
+        select.append(active, node("span", "sr-only", t("activeProject")));
+      }
+      item.append(select);
+      return item;
+    }
+
+    function renderProjectList(projects) {
+      const query = state.projectQuery.trim().toLocaleLowerCase(locale);
+      const matches = projects.filter((project) => textMatches(query, project.name, project.path, project.displayPath));
+      matches.sort((first, second) => Number(Boolean(second.pinned)) - Number(Boolean(first.pinned)));
+      const entries = matches.map(({ id, name, path, pinned, activeCount, available }) =>
+        ({ id, name, path, pinned, activeCount, available }));
+      const signature = JSON.stringify([locale, entries, state.scopeProjectId]);
+      if (lastProjectList === signature) return;
+      lastProjectList = signature;
+
+      const list = ui["project-list"];
+      const scrollPosition = list.scrollTop;
+      const focus = focusedKey(list);
+      const items = entries.map(projectItem);
+      if (!entries.length) items.push(node("li", "project-caption", t("noProjects")));
+      list.replaceChildren(projectItem(null), ...items);
+      list.scrollTop = scrollPosition;
+      if (focus) findFocus(list, focus)?.focus({ preventScroll: true });
+    }
+
+    function projectPath(project) {
+      const path = Array.from(project.displayPath || project.path || "");
+      const split = Math.ceil(path.length / 2);
+      const location = node("span", "project-path");
+      const end = node("span", "path-end");
+      end.append(node("span", "", path.slice(split).join("")));
+      location.append(node("span", "path-start truncate", path.slice(0, split).join("")), end);
+      location.title = project.path || path.join("");
+      return location;
+    }
+
+    function renderScope(project, waiting) {
+      const signature = JSON.stringify([
+        locale, project?.id, project?.name, project?.path, project?.displayPath, project?.available,
+        state.menuProjectId, waiting
+      ]);
+      if (lastScope === signature) return;
+      lastScope = signature;
+      const controls = ui["scope-controls"];
+      const focus = focusedKey(controls);
+      const name = project?.name || t("allProjects");
+      const heading = node("h2", "truncate", name);
+      heading.id = "scope-title";
+      heading.title = name;
+      ui["scope-info"].replaceChildren(icon(project ? "folder" : "layers"), heading);
+      if (project) ui["scope-info"].append(projectPath(project));
+      controls.replaceChildren(...(project ? [projectMenu(project, waiting)] : []));
+      if (focus) findFocus(controls, focus)?.focus({ preventScroll: true });
+    }
+
+    function packageChoice(project, group) {
+      return JSON.stringify([project.id, group.path]);
+    }
+
+    function renderPackages(entries) {
+      const packages = new Map();
+      for (const { project, group } of entries) {
+        const key = packageChoice(project, group);
+        if (packages.has(key)) continue;
+        const label = group.path !== group.name && group.path ? group.name + " · " + group.path : group.name;
+        packages.set(key, state.scopeProjectId ? label : project.name + " / " + label);
+      }
+
+      const signature = JSON.stringify([locale, [...packages]]);
+      const filter = ui["package-filter"];
+      if (lastPackages !== signature) {
+        lastPackages = signature;
+        const options = Array.from(packages).sort((a, b) => a[1].localeCompare(b[1], locale))
+          .map(([key, label]) => new Option(label, key));
+        filter.replaceChildren(new Option(t("allPackages"), ""), ...options);
+      }
+      if (state.packageFilter && !packages.has(state.packageFilter)) state.packageFilter = "";
+      filter.disabled = !packages.size;
+      filter.value = state.packageFilter;
+    }
+
+    function showSelectedScript() {
+      const { projectId, taskId } = state.selection;
+      const key = projectId && taskId ? JSON.stringify(["log", projectId, taskId]) : null;
+      if (lastSelectedScript?.dataset.focusKey === key && lastSelectedScript.isConnected) return;
+      lastSelectedScript?.setAttribute("aria-pressed", "false");
+      lastSelectedScript = key ? findFocus(ui["script-rows"], key) : null;
+      lastSelectedScript?.setAttribute("aria-pressed", "true");
+    }
+
+    function renderScripts(data, project, waiting) {
+      const scope = project ? [project] : data.projects;
+      const entries = scope.flatMap((item) =>
+        projectTasks(data, item).map((task) => ({ project: item, task, group: taskPackage(task) })));
+      renderPackages(entries);
+
+      const query = state.scriptQuery.trim().toLocaleLowerCase(locale);
+      const visible = entries.filter(({ project, task, group }) => (
+        (!state.activeOnly || task.active || task.stopping) &&
+        (!state.packageFilter || state.packageFilter === packageChoice(project, group)) &&
+        textMatches(query, task.name, task.command, task.detail, group.name, group.path)
+      ));
+      ui["filter-all"].setAttribute("aria-pressed", String(!state.activeOnly));
+      ui["filter-active"].setAttribute("aria-pressed", String(state.activeOnly));
+      const emptyMessage = project?.available === false ? "projectUnavailable"
+        : scope.some((item) => item.scanning) && !entries.length ? "scanningFiles"
+        : query || state.packageFilter ? "noMatches" : state.activeOnly ? "noActive" : "noScripts";
+      const signature = JSON.stringify([
+        locale, state.scopeProjectId, waiting, state.action, emptyMessage,
+        visible.map(({ project: { id, name, available }, task }) => [id, name, available, task])
+      ]);
+
+      if (lastScripts === signature) {
+        showSelectedScript();
+        return;
+      }
+      lastScripts = signature;
+      const list = ui["script-list"];
+      const table = ui["script-rows"];
+      const scrollPosition = list.scrollTop;
+      const focus = focusedKey(table);
+      const rows = visible.map(({ project, task }) => scriptRow(project, task, waiting));
+      if (!rows.length) {
+        const row = node("tr");
+        const cell = node("td", "empty", t(emptyMessage));
+        cell.colSpan = 4;
+        row.append(cell);
+        rows.push(row);
+      }
+      table.replaceChildren(...rows);
+      list.scrollTop = scrollPosition;
+      showSelectedScript();
+      if (focus) {
+        const [kind, projectId, taskId] = JSON.parse(focus);
+        const next = findFocus(table, focus)
+          || (kind === "run" ? findFocus(table, JSON.stringify(["log", projectId, taskId])) : null);
+        next?.focus({ preventScroll: true });
+      }
+    }
+
+    function scrollToEnd() {
+      ui.log.scrollTop = ui.log.scrollHeight;
+    }
+
+    function renderLog(data) {
+      const { project, task } = selectedTask(data);
+      const current = task && data.projectId === project.id && data.selectedTaskId === task.id;
+      const log = current && typeof data.log === "string" ? data.log : "";
+      const text = log || t(!task ? "selectScript" : current ? "noLogs" : "loadingLogs");
+      const logId = task ? JSON.stringify([project.id, task.id]) : "";
+      const switched = logId !== lastLogId;
+      ui["log-context"].hidden = !task;
+      if (task) {
+        const group = taskPackage(task);
+        const title = [project.name, group.path ? group.name : null, task.name].filter(Boolean).join(" / ");
+        setText(ui["log-title"], title);
+        ui["log-title"].title = title;
+        setText(ui["log-status"], taskStatus(task));
+        ui["log-status"].dataset.kind = taskKind(task);
+      }
+      if (switched || text !== lastLogText) {
+        setText(ui.log, text);
+        if (ui["log-auto"].checked) scrollToEnd();
+        else if (switched) ui.log.scrollTop = 0;
+        lastLogId = logId;
+        lastLogText = text;
+      }
+      ui.log.toggleAttribute("data-empty", !log);
+      ui["log-bottom"].disabled = !log;
+      ui["log-copy"].disabled = !log;
+      const count = log ? log.replace(/\n$/, "").split("\n").length : 0;
+      setText(ui["log-lines"], quantity(count, "oneLine", "lineCount"));
+    }
+
+    function updateCopyFeedback(result) {
+      const label = t(result || "copyLogs");
+      ui["log-copy"].title = label;
+      ui["log-copy"].setAttribute("aria-label", label);
+      ui["log-copy"].dataset.copied = String(result === "copied");
+      setText(ui["copy-feedback"], result ? label : "");
+    }
+
+    function copyThroughSelection(text) {
+      const previous = document.activeElement;
+      const field = node("textarea", "clipboard-buffer");
+      field.value = text;
+      field.readOnly = true;
+      field.tabIndex = -1;
+      document.body.append(field);
+      field.select();
+      try {
+        return document.execCommand("copy");
+      } finally {
+        field.remove();
+        previous?.focus({ preventScroll: true });
+      }
+    }
+
+    async function copyLogs() {
+      const data = state.snapshot;
+      const { project, task } = selectedTask(data);
+      if (!task || data.projectId !== project.id || data.selectedTaskId !== task.id || !data.log) return;
+      let copied = false;
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(data.log);
+          copied = true;
+        } else {
+          copied = copyThroughSelection(data.log);
+        }
+      } catch {
+        try { copied = copyThroughSelection(data.log); } catch { /* The host may block clipboard writes. */ }
+      }
+      updateCopyFeedback(copied ? "copied" : "copyFailed");
+      if (!copied) {
+        state.actionError = new LocalizedError("copyFailed");
+        render();
+      } else if (state.actionError?.key === "copyFailed") {
+        state.actionError = null;
+        render();
+      }
+      clearTimeout(state.copyTimer);
+      state.copyTimer = setTimeout(() => updateCopyFeedback(""), 1600);
+    }
+
+    function render() {
+      const data = state.snapshot;
+      const picking = Boolean(data?.pickPending || state.action?.name === "choose");
+      const waiting = picking || Boolean(state.action) || state.status !== "ready";
+      const problem = state.actionError || state.transportError;
+      const error = problem ? problem.message || t("operationError") : "";
+      setText(ui["error-text"], error);
+      ui.error.hidden = !error;
+      setText(ui.retry, t(state.status === "ready" ? "refreshStatus" : "reconnect"));
+      ui.retry.disabled = picking || Boolean(state.action) || state.status === "connecting";
+      ui["add-project"].disabled = waiting;
+      setText(ui["add-project"].lastElementChild, t(picking ? "waitingForFolder" : "openProject"));
+      const scanning = state.action?.name === "refresh" || data?.projects.some((project) => project.scanning);
+      ui.scan.disabled = waiting || !data || scanning;
+      setText(ui.scan.lastElementChild, t(scanning ? "scanning" : "rescan"));
+
+      const hasProjects = Boolean(data?.projects.length);
+      ui.dashboard.hidden = !hasProjects;
+      ui.welcome.hidden = hasProjects || Boolean(error && !data);
+      if (hasProjects) {
+        const { projects } = data;
+        const scripts = projects.reduce((count, project) => count + projectTasks(data, project).length, 0);
+        setText(ui.counts, quantity(projects.length, "oneProject", "projectCount") + " · " +
+          quantity(scripts, "oneScript", "scriptCount"));
+        setText(ui["project-count"], new Intl.NumberFormat(locale).format(projects.length));
+        const scope = projects.find(({ id }) => id === state.scopeProjectId);
+        renderProjectList(projects);
+        renderScope(scope, waiting);
+        renderScripts(data, scope, waiting);
+        renderLog(data);
+      } else {
+        setText(ui.counts, "");
+        setText(ui["welcome-title"], t(data ? "selectProject" : error ? "unavailable" : "connecting"));
+        setText(ui["welcome-text"], t(picking ? "selectFolderHint" :
+          data ? "selectProjectHint" : error ? "reconnectHint" : "loadingProjects"));
+      }
+    }
+
+    function onVisibilityChange() {
+      if (document.hidden) clearTimeout(state.timer);
+      else schedule(0);
+    }
+
+    function dispose() {
+      if (state.status === "closed") return;
+      state.status = "closed";
+      clearTimeout(state.timer);
+      clearTimeout(state.copyTimer);
+      for (const pending of requests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new LocalizedError("closed"));
+      }
+      requests.clear();
+      observer.disconnect();
+      localeObserver.disconnect();
+      browserTheme.removeEventListener("change", applyTheme);
+      window.removeEventListener("message", onMessage);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      document.removeEventListener("click", closeOutsideMenu);
+      document.removeEventListener("keydown", dismissMenu);
+    }
+
+    function closeOutsideMenu(event) {
+      if (state.menuProjectId && !event.target.closest(".project-menu")) setMenu(null);
+    }
+
+    function dismissMenu(event) {
+      if (!state.menuProjectId || event.key !== "Escape") return;
+      const key = JSON.stringify(["open-in", state.menuProjectId]);
+      setMenu(null);
+      findFocus(ui["scope-controls"], key)?.focus();
+    }
+
+    ui["add-project"].addEventListener("click", () => queueAction("choose"));
+    ui.scan.addEventListener("click", () => queueAction("refresh"));
+    ui["project-search"].addEventListener("input", () => {
+      state.projectQuery = ui["project-search"].value;
+      ui["project-list"].scrollTop = 0;
+      render();
+    });
+    ui["script-search"].addEventListener("input", () => {
+      state.scriptQuery = ui["script-search"].value;
+      ui["script-list"].scrollTop = 0;
+      render();
+    });
+    ui["package-filter"].addEventListener("change", () => {
+      state.packageFilter = ui["package-filter"].value;
+      ui["script-list"].scrollTop = 0;
+      render();
+    });
+    for (const [id, activeOnly] of [["filter-all", false], ["filter-active", true]]) {
+      ui[id].addEventListener("click", () => {
+        state.activeOnly = activeOnly;
+        ui["script-list"].scrollTop = 0;
+        render();
+      });
+    }
+    ui.retry.addEventListener("click", () => {
+      state.actionError = null;
+      if (state.status === "ready") schedule(0);
+      else void connect();
+      render();
+    });
+    ui["log-copy"].addEventListener("click", copyLogs);
+    ui["log-bottom"].addEventListener("click", scrollToEnd);
+    ui["log-auto"].addEventListener("change", () => {
+      if (ui["log-auto"].checked) scrollToEnd();
+    });
+    document.addEventListener("click", closeOutsideMenu);
+    document.addEventListener("keydown", dismissMenu);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("message", onMessage);
+    window.addEventListener("pagehide", dispose, { once: true });
+    browserTheme.addEventListener("change", applyTheme);
+    const observer = new ResizeObserver(reportSize);
+    observer.observe(ui.app);
+    const localeObserver = new MutationObserver(() => {
+      const nextDocumentLocale = document.documentElement.lang;
+      if (nextDocumentLocale === locale) return;
+      documentLocale = nextDocumentLocale;
+      applyLocale();
+    });
+    localeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+    applyLocale();
+    applyTheme();
+    void connect();
+  </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "script-manager",
+  "version": "0.5.0",
+  "description": "Run local project scripts and view logs in Codex. 在 Codex 中运行本地项目脚本并查看日志。",
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true,
+      "interface": {
+        "displayName": "脚本管理 / Script Manager",
+        "shortDescription": "运行本地脚本并查看日志。 Run local scripts and view logs.",
+        "longDescription": "在 Codex 侧栏或原生浮窗管理 macOS 上的 Node.js 和 Spring Boot 脚本。 Run and stop local Node.js and Spring Boot scripts on macOS from the Codex sidebar or native panel.",
+        "developerName": "eraop",
+        "category": "Productivity",
+        "logo": "./assets/icon.svg",
+        "logoDark": "./assets/icon-dark.svg",
+        "composerIcon": "./assets/icon.svg",
+        "composerIconDark": "./assets/icon-dark.svg"
+      }
+    }
+  }
+}
