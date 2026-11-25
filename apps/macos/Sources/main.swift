@@ -20,10 +20,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
-            bridge = try ScriptManagerBridge { [weak self] request in
-                if let self { return self.handleBridgeRequest(request) }
-                let language = request.locale.map { ScriptManagerLanguage(locale: $0) } ?? .preferred
-                return ["ok": false, "error": language.text("Script Manager has quit.", "脚本管理器已退出。")]
+            bridge = try ScriptManagerBridge { [weak self] request, reply in
+                if let self {
+                    self.handleBridgeRequest(request, reply: reply)
+                } else {
+                    let language = request.locale.map { ScriptManagerLanguage(locale: $0) } ?? .preferred
+                    reply(["ok": false, "error": language.text("Script Manager has quit.", "脚本管理器已退出。")])
+                }
             }
         } catch ScriptManagerBridge.Failure.occupied {
             didLaunch = true
@@ -156,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func handleBridgeRequest(_ request: ScriptManagerBridge.Request) -> [String: Any] {
+    private func handleBridgeRequest(_ request: ScriptManagerBridge.Request, reply: @escaping ([String: Any]) -> Void) {
         if let locale = request.locale {
             let language = ScriptManagerLanguage(locale: locale)
             hostLanguage = language
@@ -167,17 +170,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if request.method == "revealNative" {
             if let path = request.projectId {
                 guard path.hasPrefix("/") else {
-                    return ["ok": false, "error": manager.language.text("Project path must be absolute.", "项目目录必须是绝对路径。")]
+                    reply(["ok": false, "error": manager.language.text("Project path must be absolute.", "项目目录必须是绝对路径。")])
+                    return
                 }
                 manager.openProject(URL(fileURLWithPath: path, isDirectory: true))
             }
             showWindow()
-            return ["ok": true]
+            reply(["ok": true])
+            return
         }
         if request.method == "choose" {
             requestFolderPicker(useSheet: false)
         }
-        return manager.bridgeResponse(to: request, pickPending: isPickingFolder)
+        if request.method == "add_command" {
+            manager.synchronizeProjects(force: true)
+            guard let projectID = request.projectId, let rootPath = request.rootPath, let candidateID = request.candidateId else {
+                reply(["ok": false, "error": manager.language.text("Select a suggested command.", "请选择一条建议的命令。")])
+                return
+            }
+            manager.saveCandidate(.init(projectID: projectID, rootPath: rootPath, candidateID: candidateID)) { error in
+                if let error {
+                    reply(["ok": false, "error": error])
+                } else {
+                    reply(self.manager.bridgeResponse(to: request, pickPending: self.isPickingFolder))
+                }
+            }
+            return
+        }
+        reply(manager.bridgeResponse(to: request, pickPending: isPickingFolder))
     }
 
     private func localize(_ picker: NSOpenPanel) {
@@ -239,8 +259,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 if CommandLine.arguments.dropFirst() == ["--pinned-projects"] {
     let pinned = CodexProjectCatalog().read().filter(\.pinned)
-    let paths = pinned.map {
-        URL(fileURLWithPath: $0.path, isDirectory: true).standardizedFileURL.resolvingSymlinksInPath().path
+    let paths = pinned.compactMap(\.rootPaths.first).map {
+        URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL.resolvingSymlinksInPath().path
     }
     if let output = try? JSONEncoder().encode(paths) { FileHandle.standardOutput.write(output) }
     exit(0)

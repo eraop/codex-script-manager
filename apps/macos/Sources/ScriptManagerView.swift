@@ -119,12 +119,29 @@ private struct ProjectView: View {
         project.tasks.first { $0.id == manager.selectedTaskIDs[project.id] }
     }
 
-    private var visibleTasks: [ScriptTask] {
-        let query = manager.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        if query.isEmpty { return project.tasks }
-        return project.tasks.filter {
-            $0.name.localizedStandardContains(query) || $0.command.localizedStandardContains(query)
-                || $0.detail.localizedStandardContains(query)
+    private var query: String { manager.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private func matches(_ values: String...) -> Bool {
+        query.isEmpty || values.contains { $0.localizedStandardContains(query) }
+    }
+
+    private func visibleTasks(in root: ProjectRoot) -> [ScriptTask] {
+        project.tasks.filter { task in
+            task.rootPath == root.id && (!manager.activeOnly || manager.isRunning(task, in: project.id))
+                && matches(root.id, root.name, task.name, task.command, task.detail)
+        }
+    }
+
+    private func visibleCandidates(in root: ProjectRoot) -> [ProjectCommandTools.Candidate] {
+        guard !manager.activeOnly else { return [] }
+        return (project.discoveries[root.id]?.candidates ?? []).filter {
+            matches(root.id, root.name, $0.name, $0.command, $0.cwd, $0.detail)
+        }
+    }
+
+    private var visibleRoots: [ProjectRoot] {
+        project.displayedRoots.filter {
+            (!manager.activeOnly && query.isEmpty) || !visibleTasks(in: $0).isEmpty || !visibleCandidates(in: $0).isEmpty
         }
     }
 
@@ -132,19 +149,11 @@ private struct ProjectView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            if let error = project.commandConfigError {
-                Label(error.message(in: language), systemImage: "exclamationmark.triangle")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 9)
-                Divider()
-            }
             VSplitView {
                 tasks.frame(minHeight: 155, idealHeight: 300, maxHeight: .infinity)
                 if let task = selectedTask {
-                    TaskLogView(task: task, language: language, run: manager.run(for: task, in: project))
+                    let run = manager.run(for: task, in: project)
+                    TaskLogView(task: task, language: language, run: run) { manager.stop(run) }
                         .frame(minHeight: 150, idealHeight: 215, maxHeight: .infinity)
                 }
             }
@@ -186,6 +195,9 @@ private struct ProjectView: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                 Spacer()
+                Toggle(language.text("Active", "运行中"), isOn: $manager.activeOnly)
+                    .toggleStyle(.button)
+                    .controlSize(.small)
                 TextField(language.text("Filter scripts", "筛选脚本"), text: $manager.searchQuery)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 170)
@@ -193,20 +205,27 @@ private struct ProjectView: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 9)
 
-            if visibleTasks.isEmpty {
+            if visibleRoots.isEmpty {
                 emptyTasks
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 3) {
-                        ForEach(visibleTasks) { task in
-                            let run = manager.run(for: task, in: project)
-                            TaskRow(task: task, language: language, run: run, selected: task.id == selectedTask?.id) {
-                                manager.selectTask(task.id, in: project)
-                            } start: {
-                                manager.start(task, in: project)
-                            } stop: {
-                                manager.selectTask(task.id, in: project)
-                                manager.stop(run)
+                    LazyVStack(alignment: .leading, spacing: 5) {
+                        ForEach(visibleRoots) { root in
+                            if project.displayedRoots.count > 1 {
+                                DisclosureGroup(isExpanded: expandedBinding(for: root)) {
+                                    rootContents(root)
+                                } label: {
+                                    HStack(spacing: 7) {
+                                        Text(root.name).font(.callout.weight(.semibold))
+                                        Text(root.id).font(.caption).foregroundStyle(.secondary)
+                                            .lineLimit(1).truncationMode(.middle)
+                                    }
+                                    .help(root.id)
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                            } else {
+                                rootContents(root)
                             }
                         }
                     }
@@ -218,25 +237,94 @@ private struct ProjectView: View {
         }
     }
 
-    private var emptyTasks: some View {
-        VStack(spacing: 7) {
-            if !project.isAvailable {
-                Text(language.text("Project folder unavailable", "项目目录不可用"))
-            } else if project.isScanning && project.tasks.isEmpty {
-                Text(language.text("Scanning scripts…", "正在扫描脚本…"))
-            } else if project.tasks.isEmpty {
-                Text(language.text("No runnable scripts found", "未发现可运行脚本"))
-                Text(language.text(
-                    "Add a command in .codex/script-manager.json or check the project’s Node.js or Spring Boot files.",
-                    "在 .codex/script-manager.json 中添加命令，或检查项目的 Node.js 或 Spring Boot 文件。"
-                ))
-                    .font(.caption)
-            } else {
-                Text(language.text("No matching scripts", "没有匹配的脚本"))
+    private func expandedBinding(for root: ProjectRoot) -> Binding<Bool> {
+        Binding(
+            get: { manager.isRootExpanded(root.id, in: project.id) },
+            set: { manager.setRootExpanded($0, rootPath: root.id, in: project.id) }
+        )
+    }
+
+    private func rootContents(_ root: ProjectRoot) -> some View {
+        let discovery = project.discoveries[root.id]
+        let rows = visibleTasks(in: root)
+        let candidates = visibleCandidates(in: root)
+        return VStack(alignment: .leading, spacing: 3) {
+            if !root.isAvailable {
+                notice(language.text("Project folder unavailable", "项目目录不可用"), icon: "exclamationmark.triangle")
+            }
+            if let error = discovery?.commandConfigError {
+                notice(error.message(in: language), icon: "exclamationmark.triangle")
+            }
+            if let error = discovery?.actionError {
+                notice(error.localized(in: language), icon: "exclamationmark.triangle")
+            }
+            ForEach(rows) { task in
+                let run = manager.run(for: task, in: project)
+                TaskRow(task: task, language: language, run: run, selected: task.id == selectedTask?.id) {
+                    manager.selectTask(task.id, in: project)
+                } start: {
+                    manager.start(task, in: project)
+                } stop: {
+                    manager.selectTask(task.id, in: project)
+                    manager.stop(run)
+                }
+            }
+            if !candidates.isEmpty {
+                Text(language.text("Suggested commands", "建议命令"))
+                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.top, 5)
+            }
+            ForEach(candidates) { candidate in
+                candidateRow(candidate, in: root)
+            }
+            if root.isAvailable, rows.isEmpty, candidates.isEmpty {
+                notice(project.isScanning ? language.text("Scanning scripts…", "正在扫描脚本…")
+                    : language.text("No runnable scripts found", "未发现可运行脚本"))
             }
         }
+    }
+
+    private func notice(_ text: String, icon: String? = nil) -> some View {
+        HStack(spacing: 6) {
+            if let icon { Image(systemName: icon) }
+            Text(text)
+        }
+        .font(.callout)
         .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+    }
+
+    private func candidateRow(_ candidate: ProjectCommandTools.Candidate, in root: ProjectRoot) -> some View {
+        let key = ScriptManager.CandidateKey(projectID: project.id, rootPath: root.id, candidateID: candidate.id)
+        let workingDirectory = candidate.cwd.isEmpty ? root.id : root.directory.appendingPathComponent(candidate.cwd).path
+        return HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(candidate.name).font(.callout.weight(.semibold))
+                Text(candidate.command).font(.system(.caption, design: .monospaced)).lineLimit(1)
+                Text(workingDirectory).font(.caption).lineLimit(1).truncationMode(.middle)
+            }
+            .foregroundStyle(.secondary)
+            .help("\(candidate.command)\n\(workingDirectory)")
+            Spacer(minLength: 5)
+            Button {
+                manager.saveCandidate(key) { error in
+                    if let error { manager.errorMessage = error }
+                }
+            } label: {
+                Label(language.text("Add", "添加"), systemImage: "plus")
+            }
+            .controlSize(.small)
+            .disabled(manager.savingCandidates.contains(key))
+            .accessibilityLabel(language.text("Add \(candidate.name)", "添加 \(candidate.name)"))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+    }
+
+    private var emptyTasks: some View {
+        Text(language.text("No matching scripts", "没有匹配的脚本"))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -294,6 +382,7 @@ private struct TaskLogView: View {
     let task: ScriptTask
     let language: ScriptManagerLanguage
     @ObservedObject var run: TaskRun
+    let stop: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -306,6 +395,11 @@ private struct TaskLogView: View {
                     .truncationMode(.middle)
                     .help(task.command)
                 Spacer(minLength: 5)
+                if run.status.isActive {
+                    Button(action: stop) { Label(language.text("Stop", "停止"), systemImage: "stop.fill") }
+                        .controlSize(.small)
+                        .disabled(run.status == .stopping)
+                }
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(run.log, forType: .string)

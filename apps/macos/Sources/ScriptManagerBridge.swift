@@ -8,6 +8,8 @@ final class ScriptManagerBridge {
         let taskId: String?
         let locale: String?
         let destination: String?
+        var rootPath: String? = nil
+        var candidateId: String? = nil
     }
 
     enum Failure: LocalizedError {
@@ -36,9 +38,9 @@ final class ScriptManagerBridge {
     private let listener: Int32
     private let source: DispatchSourceRead
     private let slots = DispatchSemaphore(value: 8)
-    private let handle: (Request) -> [String: Any]
+    private let handle: (Request, @escaping ([String: Any]) -> Void) -> Void
 
-    init(handle: @escaping (Request) -> [String: Any]) throws {
+    init(handle: @escaping (Request, @escaping ([String: Any]) -> Void) -> Void) throws {
         self.handle = handle
         let directoryPath = try Self.directoryPath()
         let path = directoryPath + "/" + Self.socketName
@@ -238,8 +240,9 @@ final class ScriptManagerBridge {
             let data = try Self.readLine(connection)
             let request = try JSONDecoder().decode(Request.self, from: data)
             DispatchQueue.main.async {
-                let response = self.handle(request)
-                DispatchQueue.global(qos: .userInitiated).async { self.reply(response, to: connection) }
+                self.handle(request) { response in
+                    DispatchQueue.global(qos: .userInitiated).async { self.reply(response, to: connection) }
+                }
             }
         } catch {
             let language = ScriptManagerLanguage.preferred

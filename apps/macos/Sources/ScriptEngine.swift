@@ -18,6 +18,8 @@ struct ScriptTask: Identifiable {
     var gradleDebug = false
     var configuredCommand: ConfiguredCommand?
     var isRetiredCommand = false
+    var rootPath = ""
+    var runsInLoginShell = false
 
     var command: String {
         if let configuredCommand { return configuredCommand.text }
@@ -37,6 +39,8 @@ enum ScriptCatalog {
     struct Discovery {
         let tasks: [ScriptTask]
         let commandConfigError: CommandConfigError?
+        var candidates: [ProjectCommandTools.Candidate] = []
+        var actionError: ProjectCommandTools.Message?
     }
 
     enum CommandConfigError {
@@ -57,8 +61,8 @@ enum ScriptCatalog {
                 return language.text("\(file) must be 256 KiB or smaller.", "\(file) 不能超过 256 KiB。")
             case .invalidFormat:
                 return language.text(
-                    "\(file) must contain a commands array with a name, command, and optional cwd for each entry.",
-                    "\(file) 必须包含 commands 数组，每项填写 name、command，以及可选的 cwd。"
+                    "\(file) must contain a commands array with a name and a default or platform command for each entry.",
+                    "\(file) 必须包含 commands 数组，每项填写 name，以及默认命令或平台命令。"
                 )
             case .invalidName(let index):
                 return language.text("\(file), command \(index): name must be 1–256 characters with no control characters.",
@@ -78,8 +82,13 @@ enum ScriptCatalog {
 
     private struct CommandConfig: Decodable {
         struct Entry: Decodable {
+            struct Platform: Decodable {
+                let command: String
+            }
+
             let name: String
-            let command: String
+            let command: String?
+            let platforms: [String: Platform]?
             let cwd: String?
         }
 
@@ -103,7 +112,29 @@ enum ScriptCatalog {
                 + gradleTasks(in: directory, root: root, packagePath: packagePath)
         }
         let configured = configuredCommands(in: root)
-        return Discovery(tasks: automatic + configured.tasks, commandConfigError: configured.commandConfigError)
+        let scan = ProjectCommandTools.scan(in: root)
+        let actions = scan.actions.compactMap { actionTask($0, in: root) }
+        let tasks = (automatic + configured.tasks + actions).map { task in
+            var task = task
+            task.rootPath = root.path
+            return task
+        }
+        return Discovery(tasks: tasks, commandConfigError: configured.commandConfigError,
+                         candidates: scan.candidates, actionError: scan.actionError)
+    }
+
+    private static func actionTask(_ action: ProjectCommandTools.Action, in root: URL) -> ScriptTask? {
+        let cwd = action.cwd.isEmpty ? "." : action.cwd
+        guard action.shell == "sh", !cwd.hasPrefix("/"), validCommand(action.command),
+              let projectRoot = resolvedPath(root.path),
+              let directory = configuredDirectory(projectRoot + "/" + cwd, inside: projectRoot) else { return nil }
+        return ScriptTask(
+            id: "\(root.absoluteString)#action:\(action.id)", name: action.name, directory: directory,
+            executable: "/bin/sh", arguments: ["-c", "--", action.command], detail: action.detail,
+            packagePath: relativePath(directory, inside: URL(fileURLWithPath: projectRoot, isDirectory: true)),
+            packageName: nil,
+            configuredCommand: .init(text: action.command, projectRoot: projectRoot), runsInLoginShell: true
+        )
     }
 
     private static func configuredCommands(in root: URL) -> Discovery {
@@ -137,8 +168,13 @@ enum ScriptCatalog {
             guard !name.isEmpty, name.unicodeScalars.count <= 256,
                   !containsControlCharacters(entry.name) else { return invalid(.invalidName(index)) }
             guard names.insert(name).inserted else { return invalid(.duplicateName(index)) }
-            guard !entry.command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  !entry.command.utf8.contains(0) else { return invalid(.invalidCommand(index)) }
+            let platforms = entry.platforms ?? [:]
+            let commands = [entry.command].compactMap { $0 } + platforms.values.map(\.command)
+            guard !commands.isEmpty, commands.allSatisfy(validCommand),
+                  platforms.keys.allSatisfy({ $0 == "macos" || $0 == "windows" }) else {
+                return invalid(.invalidCommand(index))
+            }
+            guard let command = platforms["macos"]?.command ?? entry.command else { continue }
             let cwd = entry.cwd ?? "."
             guard !cwd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   !cwd.hasPrefix("/"), !containsControlCharacters(cwd),
@@ -148,12 +184,16 @@ enum ScriptCatalog {
             let packagePath = relativePath(directory, inside: URL(fileURLWithPath: projectRoot, isDirectory: true))
             tasks.append(ScriptTask(
                 id: "\(root.absoluteString)#command:\(name)", name: name, directory: directory,
-                executable: "/bin/sh", arguments: ["-c", "--", entry.command],
+                executable: "/bin/sh", arguments: ["-c", "--", command],
                 detail: detail("Shell", packagePath: packagePath), packagePath: packagePath, packageName: nil,
-                configuredCommand: .init(text: entry.command, projectRoot: projectRoot)
+                configuredCommand: .init(text: command, projectRoot: projectRoot)
             ))
         }
         return Discovery(tasks: tasks, commandConfigError: nil)
+    }
+
+    private static func validCommand(_ command: String) -> Bool {
+        !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !command.utf8.contains(0)
     }
 
     private static func resolvedPath(_ path: String) -> String? {
@@ -218,7 +258,7 @@ enum ScriptCatalog {
                   let script = scripts[name] as? String, !script.isEmpty else { return nil }
             let arguments = name.hasPrefix("-") ? ["run", "--", name] : ["run", name]
             return ScriptTask(
-                id: "\(directory.absoluteString)#node:\(name)", name: name, directory: directory,
+                id: "\(root.absoluteString)#\(directory.absoluteString)#node:\(name)", name: name, directory: directory,
                 executable: manager, arguments: arguments, detail: detail(manager, packagePath: packagePath),
                 packagePath: packagePath, packageName: packageName
             )
@@ -263,12 +303,12 @@ enum ScriptCatalog {
         let arguments = ["spring-boot:run"]
         return [
             ScriptTask(
-                id: "\(directory.absoluteString)#maven:run", name: "Spring Boot Run", directory: directory,
+                id: "\(root.absoluteString)#\(directory.absoluteString)#maven:run", name: "Spring Boot Run", directory: directory,
                 executable: executable, arguments: arguments, detail: detail("Maven", packagePath: packagePath),
                 packagePath: packagePath, packageName: nil
             ),
             ScriptTask(
-                id: "\(directory.absoluteString)#maven:debug", name: "Spring Boot Debug", directory: directory,
+                id: "\(root.absoluteString)#\(directory.absoluteString)#maven:debug", name: "Spring Boot Debug", directory: directory,
                 executable: executable, arguments: arguments + ["-Dspring-boot.run.jvmArguments=\(debugOption)"],
                 detail: detail("Maven · JDWP 127.0.0.1:5005", packagePath: packagePath),
                 packagePath: packagePath, packageName: nil
@@ -316,12 +356,12 @@ enum ScriptCatalog {
         let arguments = ["--no-daemon", "--console=plain", taskName]
         return [
             ScriptTask(
-                id: "\(directory.absoluteString)#gradle:run", name: "Spring Boot Run", directory: directory,
+                id: "\(root.absoluteString)#\(directory.absoluteString)#gradle:run", name: "Spring Boot Run", directory: directory,
                 executable: executable, arguments: arguments, detail: detail("Gradle", packagePath: packagePath),
                 packagePath: packagePath, packageName: nil
             ),
             ScriptTask(
-                id: "\(directory.absoluteString)#gradle:debug", name: "Spring Boot Debug", directory: directory,
+                id: "\(root.absoluteString)#\(directory.absoluteString)#gradle:debug", name: "Spring Boot Debug", directory: directory,
                 executable: executable, arguments: arguments,
                 detail: detail("Gradle · JDWP 127.0.0.1:5005", packagePath: packagePath),
                 packagePath: packagePath, packageName: nil,
@@ -509,8 +549,9 @@ final class ScriptProcess {
         try check(posix_spawn_file_actions_addclose(&actions, readDescriptor), "close the child process read end", "关闭子进程读端")
         try check(posix_spawn_file_actions_addclose(&actions, writeDescriptor), "close the child process write end", "关闭子进程写端")
 
-        let shell = loginShell()
-        let strings = shell.arguments + [launchToken, task.directory.path, task.executable] + arguments
+        let shell = loginShell(runningAction: task.runsInLoginShell)
+        let command = task.runsInLoginShell ? [task.command] : [task.executable] + arguments
+        let strings = shell.arguments + [launchToken, task.directory.path] + command
         var argv = ([shell.path] + strings).map { strdup($0) }
         defer { argv.forEach { free($0) } }
         guard argv.allSatisfy({ $0 != nil }) else { throw systemError(ENOMEM, "prepare launch arguments", "准备启动参数") }
@@ -522,7 +563,7 @@ final class ScriptProcess {
         return (pid, readDescriptor)
     }
 
-    private static func loginShell() -> (path: String, arguments: [String]) {
+    private static func loginShell(runningAction: Bool) -> (path: String, arguments: [String]) {
         let preferred = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let preferredName = URL(fileURLWithPath: preferred).lastPathComponent
         let isSupported = ["bash", "zsh", "sh", "ksh", "fish"].contains(preferredName)
@@ -533,11 +574,13 @@ final class ScriptProcess {
         let announce = #"/usr/bin/printf '\036%s\037'"#
         // Shell startup files can change the directory set by posix_spawn.
         if name == "fish" {
-            let command = "builtin cd $argv[2]; or exit; \(announce) $argv[1]; set -e argv[1..2]; exec $argv"
+            let execute = runningAction ? "eval $argv[3]" : "set -e argv[1..2]; exec $argv"
+            let command = "builtin cd $argv[2]; or exit; \(announce) $argv[1]; \(execute)"
             return (path, ["-ilc", command, "--"])
         }
         let changeDirectory = name == "zsh" ? "builtin cd" : "command cd"
-        let command = "\(changeDirectory) -- \"$2\" || exit; \(announce) \"$1\"; shift 2; exec \"$@\""
+        let execute = runningAction ? "eval \"$3\"" : "shift 2; exec \"$@\""
+        let command = "\(changeDirectory) -- \"$2\" || exit; \(announce) \"$1\"; \(execute)"
         return (path, ["-ilc", command, "codex-script-manager"])
     }
 

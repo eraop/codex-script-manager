@@ -58,6 +58,8 @@ OPERATIONS = {
     "snapshot": ("Read projects, task status, and logs.", ("projectId", "taskId"), ()),
     "choose": ("Open the local project folder picker.", (), ()),
     "refresh": ("Rescan all projects or a single project.", ("projectId",), ()),
+    "add_command": ("Save a discovered command suggestion to the selected project folder.",
+                    ("projectId", "rootPath", "candidateId"), ("projectId", "rootPath", "candidateId")),
     "open": ("Open a known project in the file manager or Visual Studio Code.", ("projectId", "destination"), ("projectId", "destination")),
     "start": ("Start a script discovered in the project.", ("projectId", "taskId"), ("projectId", "taskId")),
     "stop": ("Stop a task managed by Script Manager.", ("projectId", "taskId"), ("projectId", "taskId")),
@@ -121,7 +123,8 @@ def tools():
             "name": f"{ENTRY_TOOL}_{name}",
             "description": description,
             "inputSchema": schema,
-            "annotations": {"readOnlyHint": name == "snapshot", "destructiveHint": name == "stop"},
+            "annotations": {"readOnlyHint": name == "snapshot", "destructiveHint": name == "stop",
+                            **({"idempotentHint": True} if name == "add_command" else {})},
             "_meta": {"ui": {"resourceUri": RESOURCE_URI, "visibility": ["app"]}},
         }
 
@@ -214,6 +217,8 @@ def bridge_call(method, arguments):
         raise BridgeError("The Script Manager request is too long.", "本地脚本管理请求过长。")
     try:
         with bridge_connection() as client:
+            if method == "add_command":
+                client.settimeout(15)
             if method == "choose" and sys.platform == "darwin":
                 require_picker_executable(client)
             client.sendall(request)
@@ -272,7 +277,7 @@ def open_repair_draft(data, arguments, locale):
     task = find(data.get("tasks"), task_id)
     if not project or not task or data.get("projectId") != project_id or data.get("selectedTaskId") != task_id:
         raise BridgeError("Select an existing script to use AI Fix.", "请选择一个现有脚本后再使用 AI 修复。")
-    root = repair.project_root(project.get("path")) if project.get("available") is not False else None
+    root = repair.project_root(task.get("rootPath", project.get("path"))) if project.get("available") is not False else None
     if root is None:
         raise BridgeError("The selected project folder is unavailable.", "所选项目的目录不可用。")
     log = data.get("log")

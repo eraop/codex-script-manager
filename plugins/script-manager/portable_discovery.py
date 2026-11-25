@@ -47,6 +47,8 @@ class Task:
     package_name: str | None = None
     configured_command: str | None = None
     gradle_debug: bool = False
+    root: Path | None = None
+    shell: str | None = None
 
     @property
     def command(self) -> str:
@@ -64,6 +66,8 @@ class Task:
         }
         if self.package_name is not None:
             result["packageName"] = self.package_name
+        if self.root is not None:
+            result["rootPath"] = str(self.root)
         return result
 
 
@@ -162,12 +166,34 @@ def command_error(index: int, english: str, chinese: str) -> ConfigError:
     return ConfigError(f"{CONFIG_PATH}, command {index}: {english}", f"{CONFIG_PATH} 的第 {index} 条命令{chinese}")
 
 
+def valid_command(value):
+    return isinstance(value, str) and bool(value.strip()) and not re.search(r"[\x00\ud800-\udfff]", value)
+
+
+def platform_command(entry):
+    default = entry.get("command")
+    if default is not None and not valid_command(default):
+        raise ValueError
+    platforms = entry.get("platforms")
+    if platforms is None:
+        platforms = {}
+    if not isinstance(platforms, dict):
+        raise ValueError
+    for platform, override in platforms.items():
+        if platform not in ("macos", "windows") or not isinstance(override, dict) or not valid_command(override.get("command")):
+            raise ValueError
+    if default is None and not platforms:
+        raise ValueError
+    platform = "windows" if os.name == "nt" else "macos"
+    return platforms.get(platform, {}).get("command", default)
+
+
 def configured_commands(root: Path) -> tuple[list[Task], ConfigError | None]:
     config = root / CONFIG_PATH
     unreadable = ConfigError(f"Could not read {CONFIG_PATH} as a project file.", f"无法读取项目中的 {CONFIG_PATH}。")
     invalid = ConfigError(
-        f"{CONFIG_PATH} must contain a commands array with a name, command, and optional cwd for each entry.",
-        f"{CONFIG_PATH} 必须包含 commands 数组，每项填写 name、command，以及可选的 cwd。",
+        f"{CONFIG_PATH} must contain a commands array with a name and command for each entry.",
+        f"{CONFIG_PATH} 必须包含 commands 数组，每项填写名称和命令。",
     )
     try:
         config.lstat()
@@ -198,8 +224,8 @@ def configured_commands(root: Path) -> tuple[list[Task], ConfigError | None]:
     for index, entry in enumerate(entries, start=1):
         if not isinstance(entry, dict):
             return [], invalid
-        name, command, cwd = (entry.get(field) for field in ("name", "command", "cwd"))
-        if not isinstance(name, str) or not isinstance(command, str) or (cwd is not None and not isinstance(cwd, str)):
+        name, cwd = (entry.get(field) for field in ("name", "cwd"))
+        if not isinstance(name, str) or (cwd is not None and not isinstance(cwd, str)):
             return [], invalid
         if not 1 <= len(name.strip()) <= 256 or control_characters(name):
             return [], command_error(index, "name must be 1–256 characters with no control characters.",
@@ -207,15 +233,19 @@ def configured_commands(root: Path) -> tuple[list[Task], ConfigError | None]:
         name = name.strip()
         if name in names:
             return [], command_error(index, "name is already in use.", "使用了重复的名称。")
-        if not command.strip() or re.search(r"[\x00\ud800-\udfff]", command):
-            return [], command_error(index, "command must be nonempty and contain no NUL characters.",
-                                     "不能为空或包含 NUL 字符。")
+        try:
+            command = platform_command(entry)
+        except ValueError:
+            return [], command_error(index, "provide a nonempty default or platform command without NUL characters.",
+                                     "需要填写非空且不含 NUL 字符的默认命令或平台命令。")
+        names.add(name)
+        if command is None:
+            continue
         try:
             directory = configured_directory(root, "." if cwd is None else cwd)
         except (ValueError, RuntimeError, OSError):
             return [], command_error(index, "cwd must be a relative path to a folder inside the project.",
                                      "需要使用项目内目录的相对路径作为 cwd。")
-        names.add(name)
         package_path = relative_directory(directory, root)
         tasks.append(Task(f"{root.as_uri()}#command:{name}", name, directory, None, (),
                           task_detail("Shell", package_path), package_path, configured_command=command))
@@ -335,6 +365,7 @@ class Project:
     path: Path
     name: str
     pinned: bool
+    roots: tuple[Path, ...] = ()
 
 
 def string_list(value) -> list[str]:
@@ -381,7 +412,10 @@ class ProjectCatalog:
             path = local_path(roots[0]) if roots else None
             if path is None or (len(roots) == 1 and path.parent.name == ".chatgpt-projects"):
                 continue
-            by_id[project_id] = (path, name if name and not control_characters(name) else path.name or str(path))
+            attached = tuple(dict.fromkeys(
+                [path] + [candidate for value in roots[1:] if (candidate := local_path(value)) is not None]
+            ))
+            by_id[project_id] = (path, name if name and not control_characters(name) else path.name or str(path), attached)
 
         migrated_by_host = state.get("app-server-project-id-by-legacy-project-id-by-host")
         migrated = {}
@@ -397,14 +431,11 @@ class ProjectCatalog:
 
         pinned = dict.fromkeys(pinned_id(project_id) for project_id in string_list(state.get("pinned-project-ids")))
         projects = []
-        seen = set()
         for project_id in dict.fromkeys([*pinned, *by_id]):
             if project_id not in by_id:
                 continue
-            path, name = by_id[project_id]
-            if path not in seen:
-                seen.add(path)
-                projects.append(Project(path, name, project_id in pinned))
+            path, name, roots = by_id[project_id]
+            projects.append(Project(path, name, project_id in pinned, roots))
         return projects
 
     def database_entries(self) -> dict | None:

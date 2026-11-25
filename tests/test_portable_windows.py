@@ -18,12 +18,19 @@ sys.path.insert(0, str(PLUGIN))
 
 import portable_bridge
 from portable_discovery import discover_tasks
+from portable_runner import PortableError, Runner
 
 
 def write_commands(root, commands):
     config = root / ".codex" / "script-manager.json"
     config.parent.mkdir(exist_ok=True)
     config.write_text(json.dumps({"commands": commands}), encoding="utf-8")
+
+
+def write_project(home, roots):
+    home.mkdir(exist_ok=True)
+    state = {"local-projects": {"local-project": {"name": "Product", "rootPaths": list(map(str, roots))}}}
+    (home / ".codex-global-state.json").write_text(json.dumps(state), encoding="utf-8")
 
 
 def wait_for(callback, timeout=10):
@@ -48,6 +55,89 @@ class DiscoveryTests(unittest.TestCase):
 
             self.assertEqual([task.name for task in tasks], ["dev"])
             self.assertIn("inside the project", error.localized("en"))
+
+    def test_platform_command_overrides_default_and_optional_for_other_platforms(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            platform = "windows" if sys.platform == "win32" else "macos"
+            other_platform = "macos" if platform == "windows" else "windows"
+            write_commands(root, [
+                {"name": "Platform", "command": "echo default", "platforms": {platform: {"command": "echo platform"}}},
+                {"name": "Other", "platforms": {other_platform: {"command": "echo other platform"}}},
+                {"name": "Existing", "command": "echo existing"},
+            ])
+
+            tasks, error = discover_tasks(root)
+
+            self.assertIsNone(error)
+            self.assertEqual([(task.name, task.command) for task in tasks], [
+                ("Platform", "echo platform"), ("Existing", "echo existing"),
+            ])
+
+
+class MultiRootTests(unittest.TestCase):
+    def test_scans_both_roots_and_saves_only_in_the_candidate_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temp = Path(temporary).resolve()
+            home = temp / "codex"
+            primary, secondary, missing = (temp / name for name in ("web", "API with spaces", "missing"))
+            for root in (primary, secondary):
+                root.mkdir()
+                (root / "package.json").write_text('{"scripts":{"dev":"node dev.js"}}', encoding="utf-8")
+            (secondary / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
+            write_project(home, (primary, missing, secondary))
+
+            runner = Runner(home)
+            try:
+                def snapshot():
+                    data = runner.call("snapshot", {})
+                    project = data["projects"][0]
+                    return None if project["scanning"] else project
+
+                project = wait_for(snapshot)
+                self.assertEqual([(Path(root["path"]), root["available"]) for root in project["roots"]], [
+                    (primary, True), (missing, False), (secondary, True),
+                ])
+                self.assertEqual([(task["name"], Path(task["rootPath"])) for task in project["tasks"]], [
+                    ("dev", primary), ("dev", secondary),
+                ])
+                self.assertNotEqual(project["tasks"][0]["id"], project["tasks"][1]["id"])
+                candidate = next(item for item in project["candidates"] if item["command"] == "docker compose up")
+                self.assertEqual(Path(candidate["rootPath"]), secondary)
+                args = {"projectId": project["id"], "candidateId": candidate["id"]}
+                with self.assertRaises(PortableError):
+                    runner.call("add_command", {**args, "rootPath": str(temp)})
+                runner.call("add_command", {**args, "rootPath": str(secondary)})
+                project = wait_for(snapshot)
+                self.assertFalse((primary / ".codex" / "script-manager.json").exists())
+                self.assertIn(("docker compose up", secondary), [
+                    (task["command"], Path(task["rootPath"])) for task in project["tasks"]
+                ])
+            finally:
+                runner.close()
+
+    def test_linked_worktree_replaces_only_the_primary_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temp = Path(temporary).resolve()
+            home = temp / "codex"
+            primary, worktree, attached = (temp / name for name in ("original", "worktree", "attached"))
+            metadata = primary / ".git" / "worktrees" / "worktree"
+            metadata.mkdir(parents=True)
+            worktree.mkdir()
+            attached.mkdir()
+            (worktree / ".git").write_text(f"gitdir: {metadata}\n", encoding="utf-8")
+            (metadata / "gitdir").write_text(f"{worktree / '.git'}\n", encoding="utf-8")
+            (metadata / "commondir").write_text("../..\n", encoding="utf-8")
+            write_project(home, (primary, attached))
+
+            runner = Runner(home)
+            try:
+                data = runner.call("add", {"path": str(worktree)})
+                project = next(item for item in data["projects"] if item["id"] == data["selectedProjectId"])
+                self.assertEqual([Path(root["path"]) for root in project["roots"]], [worktree, attached])
+                wait_for(lambda: not any(item["scanning"] for item in runner.call("snapshot", {})["projects"]))
+            finally:
+                runner.close()
 
 
 class LocalTransportTests(unittest.TestCase):
@@ -111,6 +201,67 @@ portable_bridge.serve(Path(sys.argv[3]))
 
 @unittest.skipUnless(sys.platform == "win32", "Requires native Windows cmd.exe and Job Objects")
 class NativeWindowsTests(unittest.TestCase):
+    def test_runs_a_multiline_powershell_action_and_stops_it_after_root_removal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temp = Path(temporary).resolve()
+            home, primary, secondary = (temp / name for name in ("codex", "web", "API with spaces"))
+            primary.mkdir()
+            environment = secondary / ".codex" / "environments" / "environment.toml"
+            environment.parent.mkdir(parents=True)
+            environment.write_text("""version = 1
+
+[[actions]]
+name = "Print location"
+platform = "win32"
+command = '''
+$location = (Get-Location).Path
+Write-Output $location
+exit 7
+'''
+
+[[actions]]
+name = "Start service"
+platform = "win32"
+command = '''
+Write-Output "Waiting for stop"
+Start-Sleep -Seconds 30
+'''
+""", encoding="utf-8")
+            write_project(home, (primary, secondary))
+
+            runner = Runner(home)
+            try:
+                project_args = {"projectId": str(primary)}
+
+                def discover():
+                    tasks = runner.call("snapshot", project_args)["tasks"]
+                    return {task["name"]: task["id"] for task in tasks} if len(tasks) == 2 else None
+
+                tasks = wait_for(discover)
+
+                def run(name, method):
+                    return runner.call(method, {**project_args, "taskId": tasks[name]})
+
+                def exited():
+                    data = run("Print location", "snapshot")
+                    task = next(task for task in data["tasks"] if task["id"] == tasks["Print location"])
+                    return data if task.get("exitCode") == 7 else None
+
+                run("Print location", "start")
+                data = wait_for(exited)
+                self.assertIn(str(secondary), data["log"].splitlines())
+
+                run("Start service", "start")
+                wait_for(lambda: "Waiting for stop" in run("Start service", "snapshot")["log"].splitlines())
+                write_project(home, (primary,))
+                runner.call("refresh", project_args)
+                retained = run("Start service", "snapshot")
+                self.assertEqual(retained["selectedTaskId"], tasks["Start service"])
+                run("Start service", "stop")
+                wait_for(lambda: run("Start service", "snapshot")["selectedTaskId"] != tasks["Start service"])
+            finally:
+                runner.close()
+
     def test_runs_configured_command_and_stops_its_descendant(self):
         with tempfile.TemporaryDirectory() as temporary:
             temp = Path(temporary).resolve()

@@ -4,7 +4,7 @@ import base64
 from concurrent.futures import Future, ThreadPoolExecutor
 import ctypes
 from ctypes import wintypes
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import hashlib
 import json
 import locale as system_locale
@@ -12,13 +12,17 @@ import os
 from pathlib import Path, PureWindowsPath
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 
-from portable_discovery import DEBUG_OPTION, ConfigError, ProjectCatalog, Task, discover_tasks, local_path
+from portable_discovery import (
+    DEBUG_OPTION, ConfigError, ProjectCatalog, Task, configured_directory, discover_tasks, local_path, relative_directory,
+)
+from project_commands import CommandError, save_project_candidate, scan_project_commands
 from repair import ANSI
 
 
@@ -61,6 +65,19 @@ if ($picker.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 $picker.Dispose()
 """
 
+POWERSHELL_ACTION = """
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
+$action = [ScriptBlock]::Create([IO.File]::ReadAllText($env:CODEX_SCRIPT_MANAGER_ACTION_FILE))
+Remove-Item Env:CODEX_SCRIPT_MANAGER_ACTION_FILE
+$global:LASTEXITCODE = 0
+. $action
+if (-not $?) {
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    exit 1
+}
+"""
+
 
 class PortableError(Exception):
     def __init__(self, english, chinese=None):
@@ -86,21 +103,36 @@ def decode_log(data):
 
 
 @dataclass
+class ProjectScan:
+    tasks: dict[str, Task] = field(default_factory=dict)
+    candidates: list[dict] = field(default_factory=list)
+    config_errors: dict[Path, ConfigError] = field(default_factory=dict)
+    action_errors: dict[Path, ConfigError] = field(default_factory=dict)
+
+
+@dataclass
 class ManagedProject:
     path: Path
     name: str
     source: str
     pinned: bool
-    available: bool
+    roots: tuple[Path, ...]
+    available_roots: tuple[Path, ...]
     tasks: dict[str, Task] = field(default_factory=dict)
     retired: set[str] = field(default_factory=set)
-    scan: Future[tuple[list[Task], ConfigError | None]] | None = None
-    config_error: ConfigError | None = None
+    scan: Future[ProjectScan] | None = None
+    candidates: list[dict] = field(default_factory=list)
+    config_errors: dict[Path, ConfigError] = field(default_factory=dict)
+    action_errors: dict[Path, ConfigError] = field(default_factory=dict)
     selected_task: str | None = None
 
     @property
     def id(self):
         return str(self.path)
+
+    @property
+    def available(self):
+        return bool(self.available_roots)
 
 
 @dataclass
@@ -246,6 +278,15 @@ def program_invocation(executable, arguments):
     return [resolved, *arguments], None, {}
 
 
+def powershell_invocation(script):
+    interpreter = windows_system_command(r"WindowsPowerShell\v1.0\powershell.exe") or shutil.which("pwsh.exe")
+    if interpreter is None:
+        raise PortableError("PowerShell is unavailable.", "找不到 PowerShell。")
+    program = base64.b64encode(POWERSHELL_ACTION.encode("utf-16le")).decode("ascii")
+    command = [interpreter, "-NoLogo", "-NoProfile", "-NonInteractive", "-OutputFormat", "Text", "-EncodedCommand", program]
+    return command, None, {"CODEX_SCRIPT_MANAGER_ACTION_FILE": str(script)}
+
+
 class ProcessTree:
     def __init__(self, command, executable, environment, cwd):
         self.lock = threading.Lock()
@@ -298,6 +339,76 @@ def absolute_directory(value):
 def is_unc(path):
     drive = PureWindowsPath(path).drive.casefold()
     return drive.startswith("\\\\?\\unc\\") or (drive.startswith("\\\\") and not drive.startswith("\\\\?\\"))
+
+
+def read_git_marker(path):
+    try:
+        if not stat.S_ISREG(path.lstat().st_mode):
+            return None
+        with path.open("rb") as stream:
+            payload = stream.read(8193)
+        content = payload.decode("utf-8").rstrip("\r\n")
+        return content if len(payload) <= 8192 and content and "\0" not in content else None
+    except (OSError, UnicodeError):
+        return None
+
+
+def worktree_roots(checkout, projects):
+    marker = checkout / ".git"
+    content = read_git_marker(marker)
+    if not content or not content.startswith("gitdir: "):
+        return (checkout,)
+    try:
+        metadata = (checkout / content[len("gitdir: "):]).resolve(strict=True)
+        link = read_git_marker(metadata / "gitdir")
+        common = read_git_marker(metadata / "commondir")
+        if not link or not common or (metadata / link).resolve(strict=True) != marker.resolve(strict=True):
+            return (checkout,)
+        common = (metadata / common).resolve(strict=True)
+    except (OSError, RuntimeError, ValueError):
+        return (checkout,)
+
+    matches = []
+    for project in projects:
+        try:
+            if (project.path / ".git").resolve(strict=True) == common:
+                matches.append(project)
+        except (OSError, RuntimeError, ValueError):
+            continue
+    attached = matches[0].roots[1:] if len(matches) == 1 else ()
+    return tuple(dict.fromkeys((checkout, *attached)))
+
+
+def scan_project(roots):
+    result = ProjectScan()
+    for root in roots:
+        try:
+            tasks, error = discover_tasks(root)
+            if error is not None:
+                result.config_errors[root] = error
+        except (OSError, RuntimeError, ValueError) as failure:
+            result.config_errors[root] = ConfigError(f"Could not scan this folder: {failure}", f"无法扫描此目录：{failure}")
+            continue
+        for task in tasks:
+            task = replace(task, id=f"{root.as_uri()}|{task.id}", root=root)
+            result.tasks[task.id] = task
+        try:
+            candidates, actions, error = scan_project_commands(root)
+            if error is not None:
+                result.action_errors[root] = ConfigError(error["english"], error["chinese"])
+            result.candidates.extend({**candidate, "rootPath": str(root)} for candidate in candidates)
+            for action in actions:
+                cwd = configured_directory(root, action["cwd"] or ".")
+                task_id = f"{root.as_uri()}#action:{action['id']}"
+                result.tasks[task_id] = Task(
+                    task_id, action["name"], cwd, None, (), action["detail"], relative_directory(cwd, root),
+                    configured_command=action["command"], root=root, shell=action["shell"],
+                )
+        except (OSError, RuntimeError, ValueError) as failure:
+            result.action_errors[root] = ConfigError(
+                f"Could not scan project commands: {failure}", f"无法扫描项目命令：{failure}",
+            )
+    return result
 
 
 class Runner:
@@ -358,34 +469,28 @@ class Runner:
         if not force and now - self._last_catalog_check < 1:
             return
         self._last_catalog_check = now
-        entries = [(item.path, item.name, "codex", item.pinned) for item in self.catalog.read()]
-        entries.extend((path, path.name or str(path), "manual", False) for path in self._manual_paths())
+        catalog = self.catalog.read()
+        entries = [(item.path, item.name, "codex", item.pinned, item.roots or (item.path,)) for item in catalog]
+        entries.extend((path, path.name or str(path), "manual", False, worktree_roots(path, catalog))
+                       for path in self._manual_paths())
         known_paths = set()
         projects = {}
-        for path, name, source, pinned in entries:
+        for path, name, source, pinned, roots in entries:
             if path in known_paths:
                 continue
             known_paths.add(path)
-            try:
-                available = path.is_dir()
-            except OSError:
-                available = False
+            available_roots = tuple(root for root in roots if absolute_directory(root) == root)
             item = self.projects.get(str(path))
-            needs_scan = available and (item is None or not item.available)
             if item is None:
-                item = ManagedProject(path, name, source, pinned, available)
-            else:
-                item.name, item.source, item.pinned, item.available = name, source, pinned, available
-            if not available:
-                if item.scan is not None:
-                    item.scan.cancel()
-                    item.scan = None
-                item.config_error = None
-                item.tasks = {key: task for key, task in item.tasks.items() if self._active(item.id, key)}
-                item.retired = set(item.tasks)
-            projects[item.id] = item
-            if needs_scan:
+                item = ManagedProject(path, name, source, pinned, roots, available_roots)
                 self._scan(item)
+            else:
+                item.name, item.source, item.pinned = name, source, pinned
+                if (roots, available_roots) != (item.roots, item.available_roots):
+                    item.roots, item.available_roots = roots, available_roots
+                    self._invalidate_removed_roots(item)
+                    self._scan(item, replace_pending=True)
+            projects[item.id] = item
         for project in self.projects.values():
             if project.id not in projects and any(self._active(project.id, key) for key in project.tasks):
                 project.source, project.pinned = "session", False
@@ -395,9 +500,26 @@ class Runner:
         if self.selected_project not in projects:
             self.selected_project = next((item.id for item in projects.values() if item.available), next(iter(projects), None))
 
-    def _scan(self, project):
+    def _invalidate_removed_roots(self, project):
+        available = set(project.available_roots)
+        for task_id, task in list(project.tasks.items()):
+            if task.root not in available:
+                if self._active(project.id, task_id):
+                    project.retired.add(task_id)
+                else:
+                    del project.tasks[task_id]
+        project.candidates = [candidate for candidate in project.candidates if Path(candidate["rootPath"]) in available]
+        project.config_errors = {root: error for root, error in project.config_errors.items() if root in available}
+        project.action_errors = {root: error for root, error in project.action_errors.items() if root in available}
+        if project.selected_task not in project.tasks:
+            project.selected_task = next(iter(project.tasks), None)
+
+    def _scan(self, project, *, replace_pending=False):
+        if replace_pending and project.scan is not None:
+            project.scan.cancel()
+            project.scan = None
         if project.available and project.scan is None:
-            project.scan = self._scanner.submit(discover_tasks, project.path)
+            project.scan = self._scanner.submit(scan_project, project.available_roots)
 
     def _collect_scans(self):
         for project in self.projects.values():
@@ -408,14 +530,19 @@ class Runner:
             if not project.available:
                 continue
             try:
-                tasks, error = future.result()
+                result = future.result()
             except (OSError, RuntimeError, ValueError) as failure:
-                project.config_error = ConfigError(f"Could not scan the project: {failure}", f"无法扫描项目：{failure}")
+                project.config_errors[project.path] = ConfigError(
+                    f"Could not scan the project: {failure}", f"无法扫描项目：{failure}",
+                )
                 continue
-            updated = {task.id: task for task in tasks}
+            updated = result.tasks
             retired = {key for key in project.tasks.keys() - updated.keys() if self._active(project.id, key)}
             updated.update((key, project.tasks[key]) for key in project.tasks if key in retired)
-            project.tasks, project.config_error, project.retired = updated, error, retired
+            project.tasks, project.retired = updated, retired
+            project.candidates, project.config_errors, project.action_errors = (
+                result.candidates, result.config_errors, result.action_errors,
+            )
             if project.selected_task not in updated:
                 project.selected_task = next(iter(updated), None)
             self.runs = {key: run for key, run in self.runs.items() if key[0] != project.id or key[1] in updated}
@@ -450,6 +577,16 @@ class Runner:
             return
         threading.Thread(target=self._collect_picker, args=(self._picker,), daemon=True).start()
 
+    def _add_command(self, project, root_path, candidate_id):
+        root = absolute_directory(root_path)
+        if root is None or root not in project.available_roots:
+            raise PortableError("The command's project folder is unavailable.", "命令所属的项目目录不可用。")
+        try:
+            save_project_candidate(root, candidate_id)
+        except CommandError as error:
+            raise PortableError(error.english, error.chinese) from error
+        self._scan(project, replace_pending=True)
+
     def _collect_picker(self, process):
         output, _ = process.communicate()
         with self._lock:
@@ -468,9 +605,10 @@ class Runner:
     def _open(self, project, destination):
         if not project.available:
             raise PortableError("The project folder is unavailable.", "项目目录不可用。")
+        path = project.available_roots[0]
         if destination in ("file_manager", "explorer"):
             try:
-                os.startfile(project.path)
+                os.startfile(path)
             except OSError as error:
                 raise PortableError("Could not open the project in the file manager.", "无法在文件管理器中打开项目。") from error
             return
@@ -488,7 +626,7 @@ class Runner:
         if executable is None:
             raise PortableError("Visual Studio Code is unavailable. Enable its `code` command on PATH.", "找不到 Visual Studio Code。请将 `code` 命令加入 PATH。")
         try:
-            command, program, environment = program_invocation(executable, (str(project.path),))
+            command, program, environment = program_invocation(executable, (str(path),))
             self._launch_view(command, executable=program, environment=environment)
         except OSError as error:
             raise PortableError("Could not open the project in Visual Studio Code.", "无法在 Visual Studio Code 中打开项目。") from error
@@ -511,20 +649,26 @@ class Runner:
         project.selected_task = task.id
         run = self.runs[key] = Run(locale)
         run.append(f"$ {task.command}\n")
-        debug = None
+        launch_files = None
         try:
             cwd = absolute_directory(task.cwd)
-            root = absolute_directory(project.path)
-            if cwd is None or root is None or not cwd.is_relative_to(root):
+            root = absolute_directory(task.root)
+            if (cwd is None or root is None or root != task.root
+                    or root not in project.available_roots or not cwd.is_relative_to(root)):
                 raise PortableError("The working directory is unavailable or outside the project.", "工作目录不可用或不在项目内。")
-            if task.configured_command is not None:
+            if task.shell == "powershell":
+                launch_files = tempfile.TemporaryDirectory(prefix="codex-script-manager-")
+                action = Path(launch_files.name) / "action.ps1"
+                action.write_bytes(task.configured_command.encode("utf-8"))
+                command, executable, environment = powershell_invocation(action)
+            elif task.configured_command is not None:
                 command, executable = cmd_invocation(task.configured_command)
                 environment = {}
             else:
                 arguments = task.arguments
                 if task.gradle_debug:
-                    debug = tempfile.TemporaryDirectory(prefix="codex-script-manager-")
-                    init_script = Path(debug.name) / "debug.gradle"
+                    launch_files = tempfile.TemporaryDirectory(prefix="codex-script-manager-")
+                    init_script = Path(launch_files.name) / "debug.gradle"
                     init_script.write_text(
                         "allprojects {\n"
                         "    tasks.withType(org.gradle.api.tasks.JavaExec).matching { it.name == 'bootRun' }.all {\n"
@@ -542,23 +686,23 @@ class Runner:
                 )
             run.tree = ProcessTree(command, executable, environment, cwd)
         except (OSError, PortableError, ValueError) as error:
-            if debug is not None:
-                self._remove_debug_configuration(debug)
+            if launch_files is not None:
+                self._remove_launch_files(launch_files)
             run.status = "failed"
             message = translate(locale, str(error), error.chinese) if isinstance(error, PortableError) else str(error)
             run.append(translate(locale, "[Launch failed] ", "[启动失败] ") + message + "\n")
             return
-        thread = threading.Thread(target=self._watch, args=(key, run, debug), daemon=True)
+        thread = threading.Thread(target=self._watch, args=(key, run, launch_files), daemon=True)
         thread.start()
 
     @staticmethod
-    def _remove_debug_configuration(debug):
+    def _remove_launch_files(launch_files):
         try:
-            debug.cleanup()
+            launch_files.cleanup()
         except OSError:
             pass
 
-    def _watch(self, key, run, debug):
+    def _watch(self, key, run, launch_files):
         tree = run.tree
         reader = threading.Thread(target=self._read_output, args=(run, tree.process.stdout), daemon=True)
         reader.start()
@@ -567,8 +711,8 @@ class Runner:
         except OSError:
             code = 1
         reader.join(timeout=1)
-        if debug is not None:
-            self._remove_debug_configuration(debug)
+        if launch_files is not None:
+            self._remove_launch_files(launch_files)
         with self._lock:
             stopping = run.status == "stopping"
             run.code, run.tree = code, None
@@ -612,13 +756,23 @@ class Runner:
                 run = self.runs.get((item.id, task.id))
                 status = status_row(locale, run.status, run.code) if run else status_row(locale, "idle")
                 task_rows.append({**task.row(), **status})
+            root_paths = dict.fromkeys((*item.roots, *(task.root for task in item.tasks.values() if task.root)))
+            roots = []
+            for path in root_paths:
+                root = {"path": str(path), "name": path.name or str(path), "available": path in item.available_roots}
+                if path in item.config_errors:
+                    root["commandConfigError"] = item.config_errors[path].localized(locale)
+                if path in item.action_errors:
+                    root["actionError"] = item.action_errors[path].localized(locale)
+                roots.append(root)
             row = {
                 "id": item.id, "name": item.name, "path": str(item.path), "source": item.source,
                 "pinned": item.pinned, "available": item.available, "scanning": item.scan is not None,
                 "tasks": task_rows, "activeCount": sum(task["active"] for task in task_rows),
+                "roots": roots, "candidates": item.candidates,
             }
-            if item.config_error is not None:
-                row["commandConfigError"] = item.config_error.localized(locale)
+            if len(roots) == 1 and item.path in item.config_errors:
+                row["commandConfigError"] = item.config_errors[item.path].localized(locale)
             if project is item:
                 tasks = task_rows
                 candidate = task_id or item.selected_task
@@ -642,12 +796,14 @@ class Runner:
             self._collect_scans()
             project_id, task_id, locale = (arguments.get(key) for key in ("projectId", "taskId", "locale"))
             project = self.projects.get(project_id)
-            if project is None and (method in ("open", "start", "stop") or (method == "refresh" and project_id)):
+            if project is None and (method in ("open", "start", "stop", "add_command") or (method == "refresh" and project_id)):
                 raise PortableError("This project is not open.", "该项目尚未打开。")
             if method == "choose":
                 self._choose(locale)
             elif method == "add":
                 project = self._add(arguments.get("path"))
+            elif method == "add_command":
+                self._add_command(project, arguments.get("rootPath"), arguments.get("candidateId"))
             elif method == "refresh":
                 projects = [project] if project is not None else self.projects.values()
                 for item in projects:

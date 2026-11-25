@@ -271,6 +271,27 @@
     .scripts th, .scripts td { text-align: start; }
     .scripts thead { position: sticky; top: 0; z-index: 1; background: var(--surface); }
     .scripts th { padding: 4px 6px 7px; font-weight: 500; }
+    .directory-heading th { padding: 4px 0 2px; }
+    .directory-toggle {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      min-height: 30px;
+      gap: 7px;
+      padding: 4px 8px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--raised);
+      text-align: start;
+      font-size: 12px;
+    }
+    .directory-toggle:hover { background: var(--hover); }
+    .directory-toggle:focus-visible { outline-offset: -2px; }
+    .directory-toggle[aria-expanded="false"] .icon { transform: rotate(-90deg); }
+    .directory-name { font-weight: 700; }
+    .directory-path, .directory-count { color: var(--muted); }
+    .directory-count { flex: none; margin-inline-start: auto; }
+    .directory-errors p { margin: 4px 6px; }
     .project-menu { position: relative; display: flex; }
     .project-menu .button { min-height: 31px; }
     .project-menu-options {
@@ -311,6 +332,11 @@
     .script-package, .command { color: var(--muted); font-size: 12px; }
     .command, .terminal-output { font-family: var(--mono); }
     .command { display: block; }
+    .candidate-row td { vertical-align: top; padding-block: 7px; }
+    .candidate-row .script-name { overflow-wrap: anywhere; }
+    .candidate-command { overflow-wrap: anywhere; white-space: pre-wrap; }
+    .candidate-directory { display: block; margin-top: 2px; }
+    .candidate-add { max-width: 100%; min-height: 26px; padding: 2px 6px; font-size: 12px; }
     .status { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; gap: 6px; font-size: 12px; }
     .status::before { content: ""; width: 8px; height: 8px; flex: none; border-radius: 50%; background: currentColor; }
     .status[data-kind="active"], .status[data-kind="succeeded"] { color: var(--green); }
@@ -608,6 +634,7 @@
             <div class="scope-controls" id="scope-controls"></div>
           </header>
           <p class="command-config-error" id="command-config-error" role="alert" hidden></p>
+          <span class="sr-only" id="command-feedback" role="status"></span>
           <div class="toolbar">
             <label class="search">
               <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
@@ -633,7 +660,6 @@
                   <th scope="col" data-text="status">Status</th>
                 </tr>
               </thead>
-              <tbody id="script-rows"></tbody>
             </table>
           </div>
         </section>
@@ -655,6 +681,7 @@
           <div class="log-context" id="log-context" hidden>
             <div class="truncate">
               <p class="log-title truncate" id="log-title"></p>
+              <p class="log-detail truncate" id="log-location" hidden></p>
             </div>
             <span class="status" id="log-status"></span>
           </div>
@@ -689,6 +716,12 @@
         packageFilter: "Filter by package",
         allPackages: "All packages",
         rootPackage: "Root",
+        addCommand: "Add",
+        addNamedCommand: "Add {value} to project commands",
+        addedCommand: "Added {value} to project commands.",
+        candidateDirectory: "Run from {value}",
+        candidateCount: "{value} suggested",
+        noDirectoryScripts: "No commands found in this folder.",
         pinned: "Pinned project",
         script: "Script",
         command: "Command",
@@ -772,6 +805,12 @@
         packageFilter: "按包筛选",
         allPackages: "全部包",
         rootPackage: "根目录",
+        addCommand: "添加",
+        addNamedCommand: "添加「{value}」到项目命令",
+        addedCommand: "已添加项目命令「{value}」。",
+        candidateDirectory: "工作目录 {value}",
+        candidateCount: "{value} 条建议",
+        noDirectoryScripts: "此目录中未找到命令。",
         pinned: "已置顶",
         script: "脚本",
         command: "命令",
@@ -850,9 +889,9 @@
     const ids = [
       "app", "add-project", "scan", "error", "error-text", "retry", "project-loading", "welcome",
       "welcome-title", "welcome-text", "dashboard", "counts", "project-count",
-      "project-search", "project-list", "scope-info", "scope-controls", "command-config-error", "script-search",
-      "filters", "filter-all", "filter-active", "package-filter", "script-list", "script-rows",
-      "log", "log-tabs", "log-panel", "log-context", "log-title", "log-status", "log-auto",
+      "project-search", "project-list", "scope-info", "scope-controls", "command-config-error", "command-feedback", "script-search",
+      "filters", "filter-all", "filter-active", "package-filter", "script-list", "scripts",
+      "log", "log-tabs", "log-panel", "log-context", "log-title", "log-location", "log-status", "log-auto",
       "log-copy", "log-bottom", "copy-feedback", "log-fix", "project-path-form", "project-path-input",
       "project-path-submit", "project-path-cancel"
     ];
@@ -878,6 +917,7 @@
       scriptQuery: "",
       packageFilter: "",
       activeOnly: false,
+      collapsedDirectories: new Set(),
       menuProjectId: null,
       copyTimer: 0,
       fixPending: false
@@ -1252,6 +1292,7 @@
         if (action?.closeLog) dismissLog(next, action.args);
         const addedProject = action?.name === "add" ? next.selectedProjectId : null;
         if (addedProject) closeProjectPathForm();
+        if (action?.candidateName) setText(ui["command-feedback"], t("addedCommand", action.candidateName));
         if (revision === state.revision || action?.closeLog || addedProject) adoptSnapshot(next, addedProject);
       } catch (error) {
         if (state.status !== "closed") {
@@ -1325,10 +1366,11 @@
       }
     }
 
-    function queueAction(name, args = {}, { closeLog = false } = {}) {
+    function queueAction(name, args = {}, { closeLog = false, candidateName = "" } = {}) {
       if (!canQueueAction()) return;
       state.actionError = null;
-      state.action = { name, args, closeLog };
+      state.action = { name, args, closeLog, candidateName };
+      if (candidateName) setText(ui["command-feedback"], "");
       if (name === "start") {
         state.dismissedLogs.delete(logKey(args.projectId, args.taskId));
         setLogSelection(args.projectId, args.taskId);
@@ -1385,10 +1427,21 @@
       const path = typeof task.packagePath === "string" ? task.packagePath
         : (detailPath?.includes("/") || task.detail?.endsWith(" · " + detailPath) && !detailPath.startsWith("JDWP "))
           ? detailPath : "";
-      return { path, name: task.packageName || path.split("/").at(-1) || t("rootPackage") };
+      return { path, name: task.packageName || folderName(path) || t("rootPackage") };
     }
 
-    function scriptRow(project, task, group, waiting) {
+    function folderName(path) {
+      return path.split(/[\\/]/).filter(Boolean).at(-1) || path;
+    }
+
+    function pathInRoot(root, path) {
+      if (!path) return root;
+      if (!root) return path;
+      if (/^(?:[A-Z]:\\|\\\\)/i.test(root)) return root.replace(/[\\/]+$/, "") + "\\" + path.replaceAll("/", "\\");
+      return root.replace(/\/+$/, "") + "/" + path;
+    }
+
+    function scriptRow(project, task, group, root, waiting) {
       const row = node("tr", "script-row");
       const name = node("span", "script-main");
       name.append(node("span", "script-name truncate", task.name));
@@ -1429,10 +1482,33 @@
       run.setAttribute("aria-label", label + " " + task.name);
       run.title = label;
       run.append(icon(stopping ? "stop" : "play"));
-      run.disabled = waiting || taskKind(task) === "stopping" || (project.available === false && !stopping);
+      run.disabled = waiting || taskKind(task) === "stopping" || (root.available === false && !stopping);
       const action = node("td");
       action.append(run);
       row.append(action, nameCell, commandCell, statusCell);
+      return row;
+    }
+
+    function candidateRow(project, candidate, root, waiting) {
+      const row = node("tr", "script-row candidate-row");
+      const name = node("td");
+      name.append(node("span", "script-name", candidate.name));
+      if (candidate.detail) name.append(node("div", "script-package", candidate.detail));
+      const preview = node("td");
+      const command = node("code", "command candidate-command", candidate.command);
+      const location = node("span", "script-package candidate-directory", t("candidateDirectory", candidate.cwd || "."));
+      location.title = pathInRoot(root.path, candidate.cwd);
+      preview.append(command, location);
+      const action = node("td");
+      const add = button("button candidate-add", t("addCommand"), ["candidate", project.id, root.path, candidate.id],
+        () => queueAction("add_command", {
+          projectId: project.id, rootPath: root.path, candidateId: candidate.id
+        }, { candidateName: candidate.name }));
+      add.setAttribute("aria-label", t("addNamedCommand", candidate.name));
+      add.title = pathInRoot(root.path, commandConfigPath);
+      add.disabled = waiting || root.available === false;
+      action.append(add);
+      row.append(node("td"), name, preview, action);
       return row;
     }
 
@@ -1532,7 +1608,8 @@
     }
 
     function renderScope(project, waiting) {
-      const configError = typeof project.commandConfigError === "string" ? project.commandConfigError.trim() : "";
+      const scopedError = project.roots?.some((root) => root.commandConfigError === project.commandConfigError);
+      const configError = !scopedError && typeof project.commandConfigError === "string" ? project.commandConfigError.trim() : "";
       const alert = ui["command-config-error"];
       alert.hidden = !configError;
       setText(alert, configError);
@@ -1553,17 +1630,19 @@
       if (focus) findFocus(controls, focus)?.focus({ preventScroll: true });
     }
 
-    function packageChoice(group) {
-      return JSON.stringify(group.path);
+    function packageChoice(root, group) {
+      return JSON.stringify([root.path, group.path]);
     }
 
-    function renderPackages(entries) {
+    function renderPackages(directories, grouped) {
       const packages = new Map();
-      for (const { group } of entries) {
-        const key = packageChoice(group);
-        if (packages.has(key)) continue;
-        const label = group.path !== group.name && group.path ? group.name + " · " + group.path : group.name;
-        packages.set(key, label);
+      for (const { root, entries } of directories) {
+        for (const { group } of entries) {
+          const key = packageChoice(root, group);
+          if (packages.has(key)) continue;
+          const label = group.path !== group.name && group.path ? group.name + " · " + group.path : group.name;
+          packages.set(key, grouped ? root.name + " / " + label : label);
+        }
       }
 
       const signature = JSON.stringify([locale, [...packages]]);
@@ -1584,29 +1663,121 @@
       const key = projectId && taskId ? JSON.stringify(["log", projectId, taskId]) : null;
       if (lastSelectedScript?.dataset.focusKey === key && lastSelectedScript.isConnected) return;
       lastSelectedScript?.setAttribute("aria-pressed", "false");
-      lastSelectedScript = key ? findFocus(ui["script-rows"], key) : null;
+      lastSelectedScript = key ? findFocus(ui.scripts, key) : null;
       lastSelectedScript?.setAttribute("aria-pressed", "true");
     }
 
+    function commandDirectories(data, project) {
+      const primary = project.path || "";
+      const directories = new Map((project.roots || []).map((root) => [root.path, { root, entries: [] }]));
+      function entriesFor(path) {
+        if (!directories.has(path)) {
+          const root = { path, name: folderName(path) || project.name };
+          if (path === primary) root.available = project.available;
+          directories.set(path, { root, entries: [] });
+        }
+        return directories.get(path).entries;
+      }
+      if (!directories.size) entriesFor(primary);
+      for (const task of projectTasks(data, project)) {
+        entriesFor(task.rootPath || primary).push({ task, group: taskPackage(task) });
+      }
+      for (const candidate of project.candidates || []) {
+        const cwd = candidate.cwd || "";
+        const group = { path: cwd, name: folderName(cwd) || t("rootPackage") };
+        entriesFor(candidate.rootPath || primary).push({ candidate, group });
+      }
+      return [...directories.values()];
+    }
+
+    function directoryKey(project, root) {
+      return JSON.stringify(["directory", project.id, root.path]);
+    }
+
+    function directoryHeading(project, root, entries, collapsed) {
+      const row = node("tr", "directory-heading");
+      const cell = node("th");
+      cell.scope = "rowgroup";
+      cell.colSpan = 4;
+      const key = directoryKey(project, root);
+      const toggle = button("directory-toggle", "", ["directory", project.id, root.path], () => {
+        if (state.collapsedDirectories.has(key)) state.collapsedDirectories.delete(key);
+        else state.collapsedDirectories.add(key);
+        render();
+      });
+      toggle.setAttribute("aria-expanded", String(!collapsed));
+      toggle.title = root.path;
+      const tasks = entries.filter(({ task }) => task).length;
+      const count = [
+        quantity(tasks, "oneScript", "scriptCount"),
+        entries.length > tasks ? t("candidateCount", entries.length - tasks) : ""
+      ].filter(Boolean).join(" · ");
+      const name = root.name || folderName(root.path);
+      toggle.append(icon("chevron"), node("span", "directory-name truncate", name),
+        node("span", "directory-path truncate", root.path), node("span", "directory-count", count));
+      cell.append(toggle);
+      row.append(cell);
+      return row;
+    }
+
+    function emptyScriptRow(message) {
+      const row = node("tr");
+      const cell = node("td", "empty", message);
+      cell.colSpan = 4;
+      row.append(cell);
+      return row;
+    }
+
+    function renderDirectory(project, directory, grouped, waiting, emptyMessage) {
+      const { root, entries, collapsed } = directory;
+      const body = node("tbody");
+      if (grouped) body.append(directoryHeading(project, root, entries, collapsed));
+      if (grouped && collapsed) return body;
+
+      const errors = [grouped && root.available === false ? t("projectUnavailable") : "",
+        root.commandConfigError, root.actionError].filter(Boolean);
+      if (errors.length) {
+        const row = node("tr");
+        const cell = node("td", "directory-errors");
+        cell.colSpan = 4;
+        for (const error of new Set(errors)) cell.append(node("p", "command-config-error", error));
+        row.append(cell);
+        body.append(row);
+      }
+      for (const { task, candidate, group } of entries) {
+        body.append(task ? scriptRow(project, task, group, root, waiting) : candidateRow(project, candidate, root, waiting));
+      }
+      if (!entries.length && !errors.length) {
+        body.append(emptyScriptRow(grouped ? t(project.scanning ? "scanningFiles" : "noDirectoryScripts") : emptyMessage));
+      }
+      return body;
+    }
+
     function renderScripts(data, project, waiting) {
-      const entries = projectTasks(data, project).map((task) => ({ task, group: taskPackage(task) }));
-      renderPackages(entries);
+      const directories = commandDirectories(data, project);
+      const grouped = directories.length > 1;
+      renderPackages(directories, grouped);
 
       const query = state.scriptQuery.trim().toLocaleLowerCase(locale);
-      const visible = entries.filter(({ task, group }) => (
-        (!state.activeOnly || taskIsRunning(task)) &&
-        (!state.packageFilter || state.packageFilter === packageChoice(group)) &&
-        textMatches(query, task.name, task.command, task.detail, group.name, group.path)
-      ));
+      const filtering = query || state.packageFilter || state.activeOnly;
+      const visible = directories.map(({ root, entries }) => ({
+        root,
+        collapsed: state.collapsedDirectories.has(directoryKey(project, root)),
+        entries: entries.filter(({ task, candidate, group }) => {
+          const item = task || candidate;
+          return (!state.activeOnly || (task && taskIsRunning(task))) &&
+            (!state.packageFilter || state.packageFilter === packageChoice(root, group)) &&
+            textMatches(query, item.name, item.command, item.detail, group.name, group.path, root.name, root.path);
+        })
+      })).filter(({ entries }) => !filtering || entries.length);
       ui["filter-all"].setAttribute("aria-pressed", String(!state.activeOnly));
       ui["filter-active"].setAttribute("aria-pressed", String(state.activeOnly));
       const noScriptsMessage = data.supportsCustomCommands === true ? "noScripts" : "noScriptsLegacy";
-      const emptyMessage = project.available === false ? "projectUnavailable"
-        : !entries.length ? (project.scanning ? "scanningFiles" : noScriptsMessage)
-        : query || state.packageFilter ? "noMatches" : "noActive";
+      const emptyMessage = t(!grouped && project.available === false ? "projectUnavailable"
+        : filtering ? (query || state.packageFilter ? "noMatches" : "noActive")
+        : project.scanning ? "scanningFiles" : noScriptsMessage, commandConfigPath);
       const signature = JSON.stringify([
-        locale, project.id, project.available, waiting, state.action, emptyMessage,
-        visible.map(({ task }) => task)
+        locale, project.id, project.scanning, waiting, state.action, grouped, emptyMessage, visible
       ]);
 
       if (lastScripts === signature) {
@@ -1615,24 +1786,24 @@
       }
       lastScripts = signature;
       const list = ui["script-list"];
-      const table = ui["script-rows"];
+      const table = ui.scripts;
       const scrollPosition = list.scrollTop;
       const focus = focusedKey(table);
-      const rows = visible.map(({ task, group }) => scriptRow(project, task, group, waiting));
-      if (!rows.length) {
-        const row = node("tr");
-        const cell = node("td", "empty", t(emptyMessage, commandConfigPath));
-        cell.colSpan = 4;
-        row.append(cell);
-        rows.push(row);
+      const bodies = visible.map((directory) => renderDirectory(project, directory, grouped, waiting, emptyMessage));
+      if (!bodies.length) {
+        const body = node("tbody");
+        body.append(emptyScriptRow(emptyMessage));
+        bodies.push(body);
       }
-      table.replaceChildren(...rows);
+      for (const body of Array.from(table.tBodies)) body.remove();
+      table.append(...bodies);
       list.scrollTop = scrollPosition;
       showSelectedScript();
       if (focus) {
-        const [kind, projectId, taskId] = JSON.parse(focus);
+        const [kind, projectId, itemId] = JSON.parse(focus);
         const next = findFocus(table, focus)
-          || (kind === "run" ? findFocus(table, JSON.stringify(["log", projectId, taskId])) : null);
+          || (kind === "run" ? findFocus(table, JSON.stringify(["log", projectId, itemId])) : null)
+          || (kind === "candidate" ? findFocus(table, JSON.stringify(["directory", projectId, itemId])) || list : null);
         next?.focus({ preventScroll: true });
       }
     }
@@ -1657,8 +1828,12 @@
       const actionAvailable = canQueueAction();
       const tabs = runs.map(({ project, task }) => {
         const group = taskPackage(task);
-        const title = [project.name, group.path ? group.name : null, task.name].filter(Boolean).join(" / ");
-        const location = [project.displayPath || project.path, group.path].filter(Boolean).join("/");
+        const rootPath = task.rootPath || project.path || "";
+        const root = project.roots?.find(({ path }) => path === rootPath);
+        const showRoot = project.roots?.length > 1 || rootPath !== project.path;
+        const title = [project.name, showRoot ? root?.name || folderName(rootPath) : null,
+          group.path ? group.name : null, task.name].filter(Boolean).join(" / ");
+        const location = pathInRoot(rootPath || project.displayPath || "", group.path);
         const starting = pendingStart(project, task);
         titles.set(title, (titles.get(title) ?? 0) + 1);
         return {
@@ -1783,9 +1958,13 @@
       const switched = logId !== lastLogId;
       ui["log-context"].hidden = !run;
       if (run) {
-        const { project, task, title, kind } = run;
+        const { project, task, title, location, kind } = run;
         setText(ui["log-title"], title);
         ui["log-title"].title = title;
+        const path = ui["log-location"];
+        path.hidden = !location;
+        path.title = location || "";
+        setText(path, location);
         setText(ui["log-status"], pendingStart(project, task) ? t("starting") : taskStatus(task));
         ui["log-status"].dataset.kind = kind;
       }

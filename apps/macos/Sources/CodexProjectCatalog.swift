@@ -3,7 +3,7 @@ import SQLite3
 
 final class CodexProjectCatalog {
     struct Folder {
-        let path: String
+        let rootPaths: [String]
         let name: String
         let pinned: Bool
     }
@@ -81,14 +81,15 @@ final class CodexProjectCatalog {
         case .retry:
             break
         }
-        let local = entries.compactMap { entry -> (id: String, path: String, name: String)? in
+        let local = entries.compactMap { entry -> (id: String, roots: [String], name: String)? in
             let project = entry.project
             guard let path = project.rootPaths.first, path.hasPrefix("/"), !path.utf8.contains(0) else { return nil }
             if project.rootPaths.count == 1,
                 URL(fileURLWithPath: path).deletingLastPathComponent().lastPathComponent == ".chatgpt-projects" {
                 return nil
             }
-            return (entry.id, path, project.name)
+            let roots = project.rootPaths.filter { $0.hasPrefix("/") && !$0.utf8.contains(0) }
+            return (entry.id, roots, project.name)
         }
         let byID = Dictionary(uniqueKeysWithValues: local.map { ($0.id, $0) })
         let migrated = globalState?.migratedIDs["local:\(home.path)"] ?? [:]
@@ -96,10 +97,10 @@ final class CodexProjectCatalog {
         let pinned = (globalState?.pinned ?? []).compactMap { id -> Folder? in
             guard let project = byID[id] ?? migrated[id].flatMap({ byID[$0] }),
                   used.insert(project.id).inserted else { return nil }
-            return Folder(path: project.path, name: project.name, pinned: true)
+            return Folder(rootPaths: project.roots, name: project.name, pinned: true)
         }
         return pinned + local.compactMap { project in
-            used.contains(project.id) ? nil : Folder(path: project.path, name: project.name, pinned: false)
+            used.contains(project.id) ? nil : Folder(rootPaths: project.roots, name: project.name, pinned: false)
         }
     }
 

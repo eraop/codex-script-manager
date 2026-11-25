@@ -16,7 +16,7 @@ try {
     foreach ($module in Get-ChildItem -LiteralPath $source -File -Filter '*.py') {
         Copy-Item -LiteralPath $module.FullName -Destination $stagedPlugin
     }
-    foreach ($name in 'app', 'assets', 'skills') {
+    foreach ($name in 'app', 'assets', 'skills', '_vendor') {
         Copy-Item -LiteralPath (Join-Path $source $name) -Destination $stagedPlugin -Recurse
     }
 
