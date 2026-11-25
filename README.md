@@ -4,11 +4,10 @@ A Codex desktop plugin for running local project commands and viewing logs on ma
 
 | Entry point | Use |
 | --- | --- |
-| Sidebar plugin | Open Script Manager in Codex to browse projects, run scripts, and view logs. |
+| Sidebar | Open Script Manager in Codex to browse projects, run scripts, and view logs. |
 | Chat skill | Use the `script-manager` skill in a local project chat to open the native window for the current project or worktree. |
-| Project action (optional) | Run the installed action from the project's local environment to open the same native window. |
 
-All three entry points share one local script runner. Closing the window or leaving the sidebar keeps scripts running. Reopen either view to see their status and latest logs. Quitting the native app stops the scripts it manages.
+The sidebar and chat skill share one local script runner. Closing the window or leaving the sidebar keeps scripts running. Reopen either view to see their status and latest logs. Quitting the native app stops the scripts it manages.
 
 ## Install the plugin
 
@@ -36,19 +35,6 @@ If you installed the plugin using its former ID, remove that installation and ma
 codex plugin remove script-manager@codex-actions
 codex plugin marketplace remove codex-actions
 ```
-
-## Add the optional project action
-
-The action installer needs Python 3.11 or later, or Python with `tomli` installed. From the repository root, run:
-
-```bash
-./scripts/build.sh
-./scripts/install-action.py '/path/to/project'
-```
-
-The installer adds a project action to `.codex/environments/environment.toml` and preserves the existing configuration. Use `--environment filename.toml` to select another environment file, `--app '/path/to/app.app'` to point to another app build, or `--dry-run` to print the generated command.
-
-Open the project's local environment in Codex and run the installed action. If the chat was open during installation, switch to another chat and back to reload the configuration. [Codex project actions](https://learn.chatgpt.com/docs/environments/local-environment#actions)
 
 ## Configure project commands
 
