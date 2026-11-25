@@ -18,8 +18,6 @@ struct ScriptTask: Identifiable {
     var gradleDebug = false
     var configuredCommand: ConfiguredCommand?
     var isRetiredCommand = false
-    var scriptDefinition: String?
-    var usage = ScriptUsage.unclassified
 
     var command: String {
         if let configuredCommand { return configuredCommand.text }
@@ -105,8 +103,7 @@ enum ScriptCatalog {
                 + gradleTasks(in: directory, root: root, packagePath: packagePath)
         }
         let configured = configuredCommands(in: root)
-        var classifier = ScriptUsage.Classifier(tasks: automatic + configured.tasks)
-        return Discovery(tasks: classifier.classify(in: root), commandConfigError: configured.commandConfigError)
+        return Discovery(tasks: automatic + configured.tasks, commandConfigError: configured.commandConfigError)
     }
 
     private static func configuredCommands(in root: URL) -> Discovery {
@@ -223,7 +220,7 @@ enum ScriptCatalog {
             return ScriptTask(
                 id: "\(directory.absoluteString)#node:\(name)", name: name, directory: directory,
                 executable: manager, arguments: arguments, detail: detail(manager, packagePath: packagePath),
-                packagePath: packagePath, packageName: packageName, scriptDefinition: script
+                packagePath: packagePath, packageName: packageName
             )
         }
     }

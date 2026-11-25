@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingURLs: [URL] = []
     private var window: NSWindow?
     private var folderPicker: NSOpenPanel?
+    private var isPickingFolder = false
     private var hostLanguage: ScriptManagerLanguage?
 
     init(bridgeOnly: Bool) {
@@ -119,11 +120,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openFolder() {
-        beginFolderPicker(useSheet: true)
+        requestFolderPicker(useSheet: true)
     }
 
-    private func beginFolderPicker(useSheet: Bool) {
-        guard folderPicker == nil else { return }
+    private func requestFolderPicker(useSheet: Bool) {
+        guard !isPickingFolder else { return }
+        isPickingFolder = true
+        // Reply to the bridge before AppKit connects to the folder picker service.
+        DispatchQueue.main.async { [weak self] in
+            self?.presentFolderPicker(useSheet: useSheet)
+        }
+    }
+
+    private func presentFolderPicker(useSheet: Bool) {
         let picker = NSOpenPanel()
         folderPicker = picker
         localize(picker)
@@ -136,6 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             let url = response == .OK ? picker?.url : nil
             self.folderPicker = nil
+            self.isPickingFolder = false
             if let url { self.manager.openProject(url, persist: true) }
         }
         if useSheet, let window, window.isVisible {
@@ -165,9 +175,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return ["ok": true]
         }
         if request.method == "choose" {
-            beginFolderPicker(useSheet: false)
+            requestFolderPicker(useSheet: false)
         }
-        return manager.bridgeResponse(to: request, pickPending: folderPicker != nil)
+        return manager.bridgeResponse(to: request, pickPending: isPickingFolder)
     }
 
     private func localize(_ picker: NSOpenPanel) {

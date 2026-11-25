@@ -112,38 +112,20 @@ private struct ActiveBadge: View {
 private struct ProjectView: View {
     @ObservedObject var manager: ScriptManager
     let project: ManagedProject
+
     private var language: ScriptManagerLanguage { manager.language }
-    private var query: String { manager.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private var selectedTask: ScriptTask? {
         project.tasks.first { $0.id == manager.selectedTaskIDs[project.id] }
     }
 
-    private var matchingTasks: [ScriptTask] {
-        let query = self.query
+    private var visibleTasks: [ScriptTask] {
+        let query = manager.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         if query.isEmpty { return project.tasks }
         return project.tasks.filter {
             $0.name.localizedStandardContains(query) || $0.command.localizedStandardContains(query)
-                || $0.detail.localizedStandardContains(query) || usageEvidence(for: $0).localizedStandardContains(query)
+                || $0.detail.localizedStandardContains(query)
         }
-    }
-
-    private func usageEvidence(for task: ScriptTask) -> String {
-        task.usage.evidence.map { evidence in
-            let source = evidence.source ?? ""
-            switch evidence.kind {
-            case .documentation:
-                return language.text("Documented in \(source)", "\(source) 中有运行说明")
-            case .workflow:
-                return language.text("Used in \(source)", "\(source) 中的自动化流程引用")
-            case .script:
-                return language.text("Called by \(source)", "\(source) 脚本调用")
-            case .specialized:
-                return language.text("Name suggests a specialized task", "名称表明可能用于特定任务")
-            case .noEvidence:
-                return language.text("No references found", "未找到引用")
-            }
-        }.joined(separator: " · ")
     }
 
     var body: some View {
@@ -197,13 +179,7 @@ private struct ProjectView: View {
     }
 
     private var tasks: some View {
-        let matching = matchingTasks
-        let pinned = matching.filter { manager.isScriptPinned($0, in: project.id) }
-        let groups = Dictionary(grouping: matching.filter { !manager.isScriptPinned($0, in: project.id) }) {
-            $0.usage.category
-        }
-
-        return VStack(spacing: 0) {
+        VStack(spacing: 0) {
             HStack(spacing: 7) {
                 Text(language.text("Scripts", "脚本")).font(.subheadline.weight(.semibold))
                 Text(project.tasks.count.formatted())
@@ -217,86 +193,27 @@ private struct ProjectView: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 9)
 
-            if matching.isEmpty {
+            if visibleTasks.isEmpty {
                 emptyTasks
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 3) {
-                        taskSection(pinned, title: language.text("Pinned scripts", "置顶脚本"))
-                        taskSection(groups[.common] ?? [], title: language.text("Common scripts", "常用脚本"))
-                        taskSection(groups[.automation] ?? [],
-                                    title: language.text("Automation & specialized", "自动化与专用"))
-                        unclassifiedSection(groups[.unclassified] ?? [])
+                    LazyVStack(spacing: 3) {
+                        ForEach(visibleTasks) { task in
+                            let run = manager.run(for: task, in: project)
+                            TaskRow(task: task, language: language, run: run, selected: task.id == selectedTask?.id) {
+                                manager.selectTask(task.id, in: project)
+                            } start: {
+                                manager.start(task, in: project)
+                            } stop: {
+                                manager.selectTask(task.id, in: project)
+                                manager.stop(run)
+                            }
+                        }
                     }
                     .padding(.horizontal, 10)
                     .padding(.bottom, 8)
                 }
                 .accessibilityLabel(language.text("Project scripts", "项目脚本"))
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func taskSection(_ tasks: [ScriptTask], title: String) -> some View {
-        if !tasks.isEmpty {
-            sectionHeading(title, count: tasks.count)
-                .padding(.horizontal, 8)
-                .padding(.top, 5)
-            taskRows(tasks)
-        }
-    }
-
-    @ViewBuilder
-    private func unclassifiedSection(_ tasks: [ScriptTask]) -> some View {
-        if !tasks.isEmpty {
-            let title = language.text("Needs review", "待确认")
-            if query.isEmpty {
-                let running = tasks.filter { manager.isRunning($0, in: project.id) }
-                let inactive = tasks.filter { !manager.isRunning($0, in: project.id) }
-                if inactive.isEmpty {
-                    taskSection(running, title: title)
-                } else {
-                    DisclosureGroup {
-                        taskRows(inactive)
-                    } label: {
-                        sectionHeading(title, count: tasks.count)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.top, 5)
-                    taskRows(running)
-                }
-            } else {
-                taskSection(tasks, title: title)
-            }
-        }
-    }
-
-    private func sectionHeading(_ title: String, count: Int) -> some View {
-        HStack(spacing: 6) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-            Text(count.formatted())
-                .font(.caption.monospacedDigit())
-        }
-        .foregroundStyle(.secondary)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-    }
-
-    private func taskRows(_ tasks: [ScriptTask]) -> some View {
-        ForEach(tasks) { task in
-            let run = manager.run(for: task, in: project)
-            let pinned = manager.isScriptPinned(task, in: project.id)
-            TaskRow(task: task, language: language, run: run, selected: task.id == selectedTask?.id,
-                    pinned: pinned, evidence: usageEvidence(for: task)) {
-                manager.selectTask(task.id, in: project)
-            } start: {
-                manager.start(task, in: project)
-            } stop: {
-                manager.selectTask(task.id, in: project)
-                manager.stop(run)
-            } togglePin: {
-                manager.setScriptPinned(!pinned, for: task, in: project.id)
             }
         }
     }
@@ -328,17 +245,9 @@ private struct TaskRow: View {
     let language: ScriptManagerLanguage
     @ObservedObject var run: TaskRun
     let selected: Bool
-    let pinned: Bool
-    let evidence: String
     let select: () -> Void
     let start: () -> Void
     let stop: () -> Void
-    let togglePin: () -> Void
-
-    private var pinLabel: String {
-        pinned ? language.text("Unpin \(task.name)", "取消置顶 \(task.name)")
-               : language.text("Pin \(task.name)", "置顶 \(task.name)")
-    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -349,12 +258,6 @@ private struct TaskRow: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(task.name).font(.callout.weight(.semibold)).lineLimit(1)
                         Text(task.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        Text(evidence)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
                 }
@@ -362,18 +265,8 @@ private struct TaskRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(task.command + "\n" + evidence)
+            .help(task.command)
             .accessibilityAddTraits(selected ? .isSelected : [])
-
-            Button(action: togglePin) {
-                Image(systemName: pinned ? "pin.fill" : "pin")
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20, height: 20)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.borderless)
-            .help(pinLabel)
-            .accessibilityLabel(pinLabel)
 
             Text(run.status.label(in: language))
                 .font(.caption.monospacedDigit())

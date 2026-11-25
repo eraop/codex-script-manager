@@ -409,7 +409,6 @@ final class ScriptManager: ObservableObject {
             var row: [String: Any] = [
                 "id": task.id, "name": task.name, "detail": task.detail, "command": task.command,
                 "packagePath": task.packagePath,
-                "usage": task.usage.bridgeValue,
                 "status": status.label(in: language), "statusKind": status.kind,
                 "active": status.isActive, "stopping": status == .stopping,
             ]

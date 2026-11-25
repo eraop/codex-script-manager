@@ -1,4 +1,6 @@
 import base64
+import ctypes
+import errno
 from functools import lru_cache
 import json
 import os
@@ -186,12 +188,28 @@ def bridge_connection():
                       "本地脚本管理未就绪。若已打开旧版浮窗，请退出后重试。")
 
 
+def require_picker_executable(client):
+    # AppKit cannot open the picker once the running executable has been unlinked.
+    sol_local = getattr(socket, "SOL_LOCAL", 0)
+    local_peer_pid = getattr(socket, "LOCAL_PEERPID", 2)
+    pid = client.getsockopt(sol_local, local_peer_pid)
+    executable = ctypes.create_string_buffer(4096)
+    libproc = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
+    if libproc.proc_pidpath(pid, executable, len(executable)) <= 0 and ctypes.get_errno() == errno.ENOENT:
+        raise BridgeError(
+            "The running Script Manager app bundle is missing. Quit Script Manager after your scripts finish, then reconnect.",
+            "正在运行的脚本管理应用已被移除。请等脚本运行结束后退出脚本管理，再重新连接。",
+        )
+
+
 def bridge_call(method, arguments):
     request = json.dumps({"method": method, **arguments}, ensure_ascii=False).encode("utf-8") + b"\n"
     if len(request) > MAX_REQUEST_SIZE:
         raise BridgeError("The Script Manager request is too long.", "本地脚本管理请求过长。")
     try:
         with bridge_connection() as client:
+            if method == "choose" and sys.platform == "darwin":
+                require_picker_executable(client)
             client.sendall(request)
             with client.makefile("rb") as response:
                 payload = response.readline(MAX_RESPONSE_SIZE + 1)

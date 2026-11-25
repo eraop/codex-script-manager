@@ -74,7 +74,7 @@
     }
     :root[data-display-mode="fullscreen"] { overflow: hidden; }
     :root[data-display-mode="fullscreen"] .app { height: 100dvh; }
-    .masthead, .heading, .toolbar, .button, .actions, .log-header, .log-footer, .log-context {
+    .masthead, .heading, .panel-header, .toolbar, .button, .actions, .log-footer, .log-context {
       display: flex;
       align-items: center;
     }
@@ -83,19 +83,22 @@
     .masthead .counts, .project-heading .counts { flex: none; color: var(--muted); font-size: 13px; }
     .masthead .counts { margin-inline-start: clamp(2px, 1vw, 18px); }
     .heading { min-width: 0; gap: 11px; }
-    h1 { font-size: clamp(19px, 1.9vw, 26px); font-weight: 700; letter-spacing: -.025em; }
+    .masthead .heading { font-size: clamp(19px, 1.9vw, 26px); }
+    .masthead-icon { width: 1em; height: 1em; flex: none; }
+    h1 { font-size: inherit; line-height: 1.25; font-weight: 700; letter-spacing: -.025em; }
     h2 { font-size: 18px; line-height: 1.25; font-weight: 700; letter-spacing: -.018em; }
+    .panel-header { flex: none; min-height: 52px; padding-block: 8px; }
     .brand-icon {
       display: grid;
-      width: 40px;
-      height: 36px;
+      width: 33px;
+      height: 31px;
       flex: none;
       place-items: center;
       border: 1px solid var(--control-border);
       border-radius: 8px;
       background: var(--raised);
     }
-    .brand-icon img { display: block; width: 22px; height: 22px; }
+    .brand-icon img { display: block; width: 18px; height: 18px; }
     .button {
       display: inline-flex;
       justify-content: center;
@@ -130,10 +133,9 @@
       grid-template-rows: minmax(0, 1fr);
     }
     .project-panel, .script-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-    .project-panel { border-inline-end: 1px solid var(--border); padding: 12px 8px 8px; }
-    .project-heading { min-height: 31px; margin: 0 3px 10px; }
-    .project-heading h2 { font-size: clamp(17px, 1.65vw, 22px); }
-    .project-panel .search { flex: none; margin: 0 3px 10px; }
+    .project-panel { border-inline-end: 1px solid var(--border); padding: 0 8px 8px; }
+    .project-heading { margin-inline: 3px; }
+    .project-panel .search { flex: none; margin: 9px 3px 10px; }
     .search {
       display: flex;
       align-items: center;
@@ -201,14 +203,9 @@
     .script-panel { padding: 0 9px; }
     .scope-header {
       position: relative;
-      display: flex;
-      align-items: center;
       justify-content: space-between;
       gap: 8px;
-      min-height: 52px;
-      flex: none;
-      padding: 8px 4px;
-      border-bottom: 1px solid var(--border);
+      padding-inline: 4px;
     }
     .scope-info { display: flex; align-items: center; min-width: 0; gap: 9px; }
     .scope-info h2 { flex: none; max-inline-size: 58%; }
@@ -226,7 +223,6 @@
       overflow-wrap: anywhere;
       font-size: 12px;
     }
-    .script-usage-update { flex: none; margin: 8px 2px 0; color: var(--muted); font-size: 12px; }
     .toolbar { flex: none; flex-wrap: wrap; gap: 8px; padding: 9px 2px; }
     .toolbar .search { min-width: 86px; }
     .package-filter { position: relative; min-width: 82px; max-width: min(34%, 190px); }
@@ -260,10 +256,11 @@
       border: 0;
       border-radius: 5px;
       background: transparent;
+      font-weight: 600;
     }
-    .filter[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); font-weight: 700; }
+    .filter[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
 
-    .table-frame { min-height: 0; overflow: auto; overscroll-behavior: contain; overflow-anchor: none; }
+    .table-frame { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; overflow-anchor: none; scrollbar-gutter: stable; }
     .scripts { width: 100%; border-spacing: 0; table-layout: fixed; }
     .scripts col:nth-child(1) { width: 40px; }
     .scripts col:nth-child(2) { width: 40%; }
@@ -272,7 +269,7 @@
     .scripts th, .scripts td { text-align: start; }
     .scripts thead { position: sticky; top: 0; z-index: 1; background: var(--surface); }
     .scripts th { padding: 4px 6px 7px; font-weight: 500; }
-    .project-menu { position: relative; flex: none; }
+    .project-menu { position: relative; display: flex; }
     .project-menu .button { min-height: 31px; }
     .project-menu-options {
       position: absolute;
@@ -306,41 +303,9 @@
     .script-row td:last-child { border-start-end-radius: 6px; border-end-end-radius: 6px; }
     .script-select { display: grid; width: 100%; min-width: 0; padding: 2px 0; border: 0; background: transparent; text-align: start; }
     .script-select:focus-visible { outline-offset: 0; }
-    .script-name-line { display: flex; align-items: center; gap: 3px; min-width: 0; }
-    .script-name-line > :first-child { flex: 1; }
     .script-main { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; gap: 0 5px; }
     .script-name, .script-package { max-width: 100%; }
     .script-name { font-weight: 700; }
-    .script-reason { display: block; margin-top: 1px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
-    .script-pin {
-      display: grid;
-      flex: none;
-      place-items: center;
-      width: 21px;
-      height: 21px;
-      padding: 0;
-      border: 0;
-      border-radius: 4px;
-      background: transparent;
-      color: var(--muted);
-    }
-    .script-pin:not(:disabled):hover { background: var(--raised); color: var(--text); }
-    .script-pin[aria-pressed="true"] { color: var(--text); }
-    .script-pin .icon { width: 13px; height: 13px; }
-    .script-section th { padding-block: 8px 5px; border-top: 1px solid var(--border); }
-    .script-section-label { display: flex; align-items: center; gap: 6px; font-weight: 700; }
-    .script-section-count { color: var(--muted); font-size: 11px; font-weight: 400; }
-    .script-section-toggle {
-      width: 100%;
-      padding: 2px 0;
-      border: 0;
-      border-radius: 4px;
-      background: transparent;
-      text-align: start;
-    }
-    .script-section-toggle:not(:disabled):hover { background: var(--hover); }
-    .script-section-toggle:disabled { opacity: 1; }
-    .script-section-toggle[aria-expanded="false"] .icon { rotate: -90deg; }
     .script-package, .command { color: var(--muted); font-size: 12px; }
     .command, .terminal-output { font-family: var(--mono); }
     .command { display: block; }
@@ -356,11 +321,10 @@
     .terminal { display: flex; flex-direction: column; }
 
     .terminal[hidden] { display: none; }
-    .log-header, .log-context, .log-footer { padding: 8px 12px; background: var(--raised); }
+    .log-header, .log-context, .log-footer { padding-inline: 12px; background: var(--raised); }
+    .log-context, .log-footer { padding-block: 8px; }
     .log-header { border-radius: 9px 9px 0 0; }
     .log-header .heading { gap: 8px; }
-    .log-header .brand-icon { width: 33px; height: 31px; }
-    .log-header .brand-icon img { width: 18px; height: 18px; }
     .log-header .button { min-height: 31px; }
     .log-header .icon-button { padding-inline: 8px; gap: 0; }
     .log-header .icon-button[data-copied="true"] { color: var(--green); }
@@ -421,7 +385,7 @@
     .log-panel { display: flex; flex: 1; flex-direction: column; min-height: 0; }
     .log-context { border-top: 1px solid var(--border); }
     .log-title { font-size: 16px; font-weight: 700; }
-    .log-detail, .line-count { color: var(--muted); font-size: 12px; }
+    .log-detail { color: var(--muted); font-size: 12px; }
     .terminal-output {
       flex: 1;
       min-height: 0;
@@ -437,9 +401,8 @@
     .terminal-output[data-empty] { color: var(--muted); white-space: pre-wrap; }
     .terminal-output .log-error { color: var(--danger); }
     .log-footer { border-radius: 0 0 9px 9px; }
-    .log-footer .line-count { white-space: nowrap; }
     .log-fix { min-height: 27px; padding: 2px 9px; font-size: 12px; }
-    .scroll-switch { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 13px; user-select: none; }
+    .scroll-switch { display: flex; align-items: center; gap: 7px; margin-inline-start: auto; cursor: pointer; font-size: 13px; user-select: none; }
     .scroll-switch input {
       appearance: none;
       position: relative;
@@ -465,6 +428,56 @@
     .alert, .welcome { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); }
     .alert { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--danger); }
     .welcome p { margin-top: 4px; color: var(--muted); }
+    .project-loading {
+      display: grid;
+      flex: 1;
+      align-content: center;
+      justify-items: center;
+      min-height: 280px;
+      gap: clamp(16px, 2vw, 26px);
+      padding-block: clamp(4px, 2vh, 16px) clamp(10px, 8vh, 72px);
+      color: var(--muted);
+      text-align: center;
+    }
+    :root[data-display-mode="fullscreen"] .project-loading { min-height: 0; }
+    .loading-visual {
+      display: grid;
+      width: clamp(120px, min(26vw, 34dvh), 206px);
+      aspect-ratio: 1;
+      place-items: center;
+    }
+    .loading-visual > * { grid-area: 1 / 1; }
+    .loading-visual img { width: 38%; aspect-ratio: 1; }
+    .loading-orbit {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      filter: drop-shadow(0 0 5px #5e85f6a6);
+      animation: loading-orbit-turn 2.8s linear infinite;
+    }
+    .loading-orbit::before, .loading-orbit::after { position: absolute; inset: 0; content: ""; }
+    .loading-orbit::before {
+      border-radius: 50%;
+      background: conic-gradient(from -25deg,
+        transparent 0deg, #4e79f6 28deg, #93bdff 97deg, #dceaff 110deg, transparent 128deg,
+        transparent 188deg, #3c7cf4 218deg, #a1a0ff 270deg, #d2bbff 286deg, transparent 300deg);
+      mask-image: radial-gradient(farthest-side, transparent calc(100% - 3.5px),
+        #000 calc(100% - 2.7px) calc(100% - .6px), transparent 100%);
+    }
+    .loading-orbit::after {
+      background:
+        radial-gradient(circle at 18% 12%, #c0e4ff 0 1px, #5b9cf977 1.5px, transparent 3px),
+        radial-gradient(circle at 83% 88%, #c0e4ff 0 1px, #5b9cf977 1.5px, transparent 3px);
+    }
+    .project-loading p {
+      color: color-mix(in srgb, var(--muted) 85%, var(--text));
+      font-size: clamp(14px, 1.45vw, 22px);
+      font-weight: 500;
+    }
+    @keyframes loading-orbit-turn { to { transform: rotate(1turn); } }
+    @media (prefers-reduced-motion: reduce) {
+      .loading-orbit { animation: none; }
+    }
 
     @media (max-width: 1000px) {
       .board {
@@ -478,19 +491,17 @@
       .app { padding-inline: calc(9px + var(--safe-left, 0px)) calc(9px + var(--safe-right, 0px)); }
       .masthead { flex-wrap: wrap; row-gap: 5px; }
       .masthead .heading { gap: 7px; }
-      .masthead .brand-icon { width: 32px; height: 30px; }
-      .masthead .brand-icon img { width: 18px; height: 18px; }
       .masthead .button { padding-inline: 7px; }
       .masthead .actions { margin-inline-start: auto; }
       .masthead .counts { font-size: 12px; }
       .workspace { grid-template-columns: minmax(105px, .45fr) minmax(0, 1fr); }
-      .project-panel { padding: 8px 4px 4px; }
-      .project-heading { gap: 5px; margin-bottom: 5px; }
-      .project-heading h2 { font-size: 16px; }
+      .panel-header h2 { font-size: 16px; }
+      .project-panel { padding: 0 4px 4px; }
+      .project-heading { gap: 5px; }
       .project-button { gap: 5px; min-height: 33px; padding-inline: 3px; font-size: 12px; }
       .script-panel { padding-inline: 5px; }
       .scope-info { gap: 5px; }
-      .scope-info h2 { max-inline-size: 68%; font-size: 15px; }
+      .scope-info h2 { max-inline-size: 68%; }
       .scope-info .icon { width: 15px; height: 15px; }
       .scope-header .button { padding-inline: 6px; min-height: 27px; font-size: 12px; }
       .search, .toolbar { gap: 5px; }
@@ -538,7 +549,7 @@
   <main class="app" id="app">
     <header class="masthead">
       <div class="heading">
-        <span class="brand-icon"><img data-brand-icon alt=""></span>
+        <img class="masthead-icon" data-brand-icon alt="">
         <h1 data-text="title">Script Manager</h1>
         <p class="counts" id="counts"></p>
       </div>
@@ -553,7 +564,15 @@
       <button class="button" id="retry" type="button">Reconnect</button>
     </div>
 
-    <section class="welcome" id="welcome" aria-labelledby="welcome-title" role="status">
+    <section class="project-loading" id="project-loading" role="status">
+      <div class="loading-visual" aria-hidden="true">
+        <div class="loading-orbit"></div>
+        <img data-brand-icon alt="">
+      </div>
+      <p data-text="scanningProjects">Scanning projects…</p>
+    </section>
+
+    <section class="welcome" id="welcome" aria-labelledby="welcome-title" role="status" hidden>
       <h2 id="welcome-title">Connecting to Script Manager</h2>
       <p id="welcome-text">Reading local projects.</p>
     </section>
@@ -561,7 +580,7 @@
     <div class="board" id="dashboard" hidden>
       <div class="workspace">
         <section class="project-panel" aria-labelledby="projects-heading">
-          <div class="heading project-heading">
+          <div class="panel-header heading project-heading">
             <h2 id="projects-heading" data-text="projects">Projects</h2>
             <p class="counts" id="project-count"></p>
           </div>
@@ -573,12 +592,11 @@
         </section>
 
         <section class="script-panel" aria-labelledby="scope-title">
-          <header class="scope-header">
+          <header class="panel-header scope-header">
             <div class="scope-info" id="scope-info"></div>
             <div class="scope-controls" id="scope-controls"></div>
           </header>
           <p class="command-config-error" id="command-config-error" role="alert" hidden></p>
-          <p class="script-usage-update" id="script-usage-update" role="status" hidden></p>
           <div class="toolbar">
             <label class="search">
               <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
@@ -611,7 +629,7 @@
       </div>
 
       <section class="terminal" aria-labelledby="log-heading">
-        <div class="log-header">
+        <div class="panel-header log-header">
           <div class="heading">
             <span class="brand-icon"><img data-brand-icon alt=""></span>
             <h2 id="log-heading" data-text="logs">Logs</h2>
@@ -631,11 +649,8 @@
           </div>
           <pre class="terminal-output" id="log" aria-label="Script logs" tabindex="0" data-empty>Run a script to see its logs here.</pre>
           <div class="log-footer">
+            <button class="button log-fix" id="log-fix" type="button" hidden disabled>AI Fix</button>
             <label class="scroll-switch"><input type="checkbox" role="switch" id="log-auto" checked><span data-text="autoScroll">Auto-scroll</span></label>
-            <div class="actions">
-              <span class="line-count" id="log-lines">0 lines</span>
-              <button class="button log-fix" id="log-fix" type="button" hidden disabled>AI Fix</button>
-            </div>
           </div>
         </div>
         <span class="sr-only" id="copy-feedback" role="status"></span>
@@ -649,13 +664,6 @@
     const toolPrefix = "script_manager";
     const preferenceKey = "script-manager-mcp.selection";
     const commandConfigPath = ".codex/script-manager.json";
-    const usageMessages = {
-      documentation: ["usageDocumentation", "usageDocumentationSource"],
-      workflow: ["usageWorkflow", "usageWorkflowSource"],
-      script: ["usageScript", "usageScriptSource"],
-      specialized: ["usageSpecialized", "usageSpecializedSource"],
-      noEvidence: ["usageNoEvidence"]
-    };
     const peer = window.parent;
     const requests = new Map();
     const browserTheme = window.matchMedia("(prefers-color-scheme: dark)");
@@ -669,25 +677,6 @@
         packageFilter: "Filter by package",
         allPackages: "All packages",
         rootPackage: "Root",
-        pinnedScripts: "Pinned scripts",
-        commonScripts: "Common scripts",
-        automationScripts: "Automation and specialized scripts",
-        unclassifiedScripts: "Unclassified scripts",
-        usageUnavailableScripts: "Scripts with no usage data",
-        pinScript: "Pin {value}",
-        unpinScript: "Unpin {value}",
-        usageUpdate: "After running scripts finish, quit and reopen Script Manager to see usage groups and pin scripts.",
-        usageDocumentation: "Mentioned in project documentation",
-        usageDocumentationSource: "Mentioned in {value}",
-        usageWorkflow: "Used by an automation workflow",
-        usageWorkflowSource: "Used by workflow {value}",
-        usageScript: "Called by another script",
-        usageScriptSource: "Called by {value}",
-        usageSpecialized: "Specialized task",
-        usageSpecializedSource: "Specialized task ({value})",
-        usageNoEvidence: "No usage references found",
-        usageUnspecified: "No source details available",
-        usageUnavailable: "Usage classification unavailable",
         pinned: "Pinned project",
         script: "Script",
         command: "Command",
@@ -714,8 +703,6 @@
         aiFixFailed: "Could not open the Codex repair draft.",
         jumpToEnd: "Jump to end",
         autoScroll: "Auto-scroll",
-        oneLine: "{value} line",
-        lineCount: "{value} lines",
         openProject: "Open Project",
         openIn: "Open in",
         openInProject: "Open {value} in",
@@ -725,6 +712,7 @@
         selectFolderHint: "Continue in the macOS folder picker.",
         connecting: "Connecting to Script Manager",
         loadingProjects: "Reading local projects.",
+        scanningProjects: "Scanning projects…",
         unavailable: "Connection unavailable",
         projectUnavailable: "This project folder is unavailable.",
         reconnectHint: "Try reconnecting to the local Script Manager.",
@@ -768,25 +756,6 @@
         packageFilter: "按包筛选",
         allPackages: "全部包",
         rootPackage: "根目录",
-        pinnedScripts: "已置顶脚本",
-        commonScripts: "常用脚本",
-        automationScripts: "自动化与专项脚本",
-        unclassifiedScripts: "未分类脚本",
-        usageUnavailableScripts: "暂无用法信息的脚本",
-        pinScript: "置顶 {value}",
-        unpinScript: "取消置顶 {value}",
-        usageUpdate: "等运行中的脚本结束后，退出并重新打开脚本管理，即可查看用法分组和置顶脚本。",
-        usageDocumentation: "项目文档中有提及",
-        usageDocumentationSource: "{value} 中有提及",
-        usageWorkflow: "自动化工作流会运行此脚本",
-        usageWorkflowSource: "工作流 {value} 会运行此脚本",
-        usageScript: "其他脚本会调用此脚本",
-        usageScriptSource: "{value} 会调用此脚本",
-        usageSpecialized: "专项任务",
-        usageSpecializedSource: "专项任务（{value}）",
-        usageNoEvidence: "未找到用法引用",
-        usageUnspecified: "暂无来源详情",
-        usageUnavailable: "暂无用法分类",
         pinned: "已置顶",
         script: "脚本",
         command: "命令",
@@ -813,8 +782,6 @@
         aiFixFailed: "无法打开 Codex 修复草稿。",
         jumpToEnd: "跳到末尾",
         autoScroll: "自动滚动",
-        oneLine: "{value} 行",
-        lineCount: "{value} 行",
         openProject: "打开项目",
         openIn: "打开方式",
         openInProject: "选择打开「{value}」的应用",
@@ -824,6 +791,7 @@
         selectFolderHint: "请在 macOS 文件夹选择窗口中继续。",
         connecting: "正在连接脚本管理",
         loadingProjects: "正在读取本地项目。",
+        scanningProjects: "正在扫描项目…",
         unavailable: "连接不可用",
         projectUnavailable: "该项目文件夹不可用。",
         reconnectHint: "可以重新连接本地脚本管理。",
@@ -860,11 +828,11 @@
       }
     };
     const ids = [
-      "app", "add-project", "scan", "error", "error-text", "retry", "welcome",
+      "app", "add-project", "scan", "error", "error-text", "retry", "project-loading", "welcome",
       "welcome-title", "welcome-text", "dashboard", "counts", "project-count",
-      "project-search", "project-list", "scope-info", "scope-controls", "command-config-error", "script-usage-update", "script-search",
+      "project-search", "project-list", "scope-info", "scope-controls", "command-config-error", "script-search",
       "filters", "filter-all", "filter-active", "package-filter", "script-list", "script-rows",
-      "log", "log-tabs", "log-panel", "log-context", "log-title", "log-status", "log-lines", "log-auto",
+      "log", "log-tabs", "log-panel", "log-context", "log-title", "log-status", "log-auto",
       "log-copy", "log-bottom", "copy-feedback", "log-fix"
     ];
     const ui = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
@@ -873,6 +841,7 @@
     const state = {
       status: "idle",
       snapshot: null,
+      initialLoadComplete: false,
       projectId: null,
       logSelection: null,
       logOutput: null,
@@ -888,8 +857,6 @@
       scriptQuery: "",
       packageFilter: "",
       activeOnly: false,
-      expandedUnclassified: new Set(),
-      pinFocus: null,
       menuProjectId: null,
       copyTimer: 0,
       fixPending: false
@@ -1164,6 +1131,7 @@
     function adoptSnapshot(next) {
       const previous = state.snapshot;
       state.snapshot = next;
+      if (!next.projects.some((project) => project.scanning)) state.initialLoadComplete = true;
       reconcileDismissedLogs(next);
       if (!next.projects.length) {
         setProjectSelection(null);
@@ -1215,11 +1183,14 @@
         const next = parseSnapshot(response, requestLocale);
         state.transportError = null;
         if (action?.closeLog) dismissLog(next, action.args);
-        if (revision === state.revision || action?.closeLog || action?.name === "set_pin") adoptSnapshot(next);
+        if (revision === state.revision || action?.closeLog) adoptSnapshot(next);
       } catch (error) {
         if (state.status !== "closed") {
           if (action) state.actionError = error;
-          else state.transportError = error;
+          else {
+            state.transportError = error;
+            if (state.snapshot) state.initialLoadComplete = true;
+          }
         }
       } finally {
         state.busy = false;
@@ -1229,7 +1200,8 @@
           render();
           const lively = state.snapshot?.pickPending ||
             state.snapshot?.projects.some((project) => project.activeCount > 0 || project.scanning);
-          const delay = action || state.action || revision !== state.revision || locale !== requestLocale ? 0
+          const delay = (action && !state.snapshot?.pickPending) || state.action ||
+            revision !== state.revision || locale !== requestLocale ? 0
             : state.transportError ? 4000 : lively ? 800 : 2300;
           schedule(delay);
         }
@@ -1288,8 +1260,10 @@
       if (!canQueueAction()) return;
       state.actionError = null;
       state.action = { name, args, closeLog };
-      if (name === "start") state.dismissedLogs.delete(logKey(args.projectId, args.taskId));
-      if (!closeLog && (name === "start" || name === "stop")) setLogSelection(args.projectId, args.taskId);
+      if (name === "start") {
+        state.dismissedLogs.delete(logKey(args.projectId, args.taskId));
+        setLogSelection(args.projectId, args.taskId);
+      }
       render();
       schedule(0);
     }
@@ -1345,41 +1319,7 @@
       return { path, name: task.packageName || path.split("/").at(-1) || t("rootPackage") };
     }
 
-    function taskUsage(task) {
-      const { category, evidence } = task.usage ?? {};
-      if (!["common", "automation", "unclassified"].includes(category)) {
-        return { category: "unavailable", reasons: [t("usageUnavailable")] };
-      }
-      const reasons = [];
-      if (Array.isArray(evidence)) {
-        for (const item of evidence) {
-          if (!Object.hasOwn(usageMessages, item?.kind)) continue;
-          const [summary, withSource] = usageMessages[item.kind];
-          const source = typeof item.source === "string" ? item.source.trim() : "";
-          reasons.push(source && withSource ? t(withSource, source) : t(summary));
-        }
-      }
-      if (!reasons.length) reasons.push(t(category === "unclassified" ? "usageNoEvidence" : "usageUnspecified"));
-      return { category, reasons };
-    }
-
-    function scriptPin(project, task, title, waiting, supported) {
-      const pinned = task.pinned === true;
-      const label = t(pinned ? "unpinScript" : "pinScript", title);
-      const pin = button("script-pin", "", ["pin-script", project.id, task.id], () => {
-        if (document.activeElement === pin) state.pinFocus = pin.dataset.focusKey;
-        queueAction("set_pin", { projectId: project.id, taskId: task.id, pinned: String(!pinned) });
-      });
-      pin.setAttribute("aria-label", label);
-      pin.setAttribute("aria-pressed", String(pinned));
-      pin.title = supported ? label : t("usageUpdate");
-      if (!supported) pin.setAttribute("aria-describedby", "script-usage-update");
-      pin.disabled = waiting || !supported;
-      pin.append(icon("pin"));
-      return pin;
-    }
-
-    function scriptRow(project, { task, group, usage }, waiting, pinSupported) {
+    function scriptRow(project, task, group, waiting) {
       const row = node("tr", "script-row");
       const name = node("span", "script-main");
       name.append(node("span", "script-name truncate", task.name));
@@ -1387,25 +1327,20 @@
       if (group.path) name.append(" ", node("span", "script-package truncate", "(" + group.name + ")"));
 
       const nameCell = node("td");
-      const nameLine = node("div", "script-name-line");
       if (taskHasRun(task) || pendingStart(project, task)) {
         const select = button("script-select", "", ["log", project.id, task.id], () => chooseLog(project.id, task.id));
         select.setAttribute("aria-pressed", "false");
         select.title = title;
         select.append(name);
-        nameLine.append(select);
+        nameCell.append(select);
         row.setAttribute("data-loggable", "");
         row.addEventListener("click", (event) => {
           if (!event.target.closest("button")) chooseLog(project.id, task.id);
         });
       } else {
         name.title = title;
-        nameLine.append(name);
+        nameCell.append(name);
       }
-      nameLine.append(scriptPin(project, task, title, waiting, pinSupported));
-      const reason = node("span", "script-reason", usage.reasons[0]);
-      if (usage.reasons.length > 1) reason.title = usage.reasons.join(" · ");
-      nameCell.append(nameLine, reason);
 
       const commandCell = node("td");
       const command = node("code", "command truncate", task.command);
@@ -1421,7 +1356,7 @@
       const pending = state.action?.name === operation && matchesRun(state.action.args, project, task);
       const label = t(pending ? (stopping ? "stoppingAction" : "starting") : operation);
       const run = button("button script-action", "", ["run", project.id, task.id],
-        () => queueAction(operation, { projectId: project.id, taskId: task.id }));
+        () => stopping ? closeLog(project, task) : queueAction("start", { projectId: project.id, taskId: task.id }));
       run.setAttribute("aria-label", label + " " + task.name);
       run.title = label;
       run.append(icon(stopping ? "stop" : "play"));
@@ -1583,77 +1518,15 @@
       lastSelectedScript?.setAttribute("aria-pressed", "true");
     }
 
-    function scriptSectionHeading(project, label, count, disclosure) {
-      const row = node("tr", "script-section");
-      const cell = node("th");
-      cell.colSpan = 4;
-      const caption = node("span", "script-section-label");
-      caption.append(node("span", "", t(label)), node("span", "script-section-count", new Intl.NumberFormat(locale).format(count)));
-      if (disclosure) {
-        const toggle = button("script-section-toggle", "", ["unclassified", project.id], () => {
-          if (state.expandedUnclassified.has(project.id)) state.expandedUnclassified.delete(project.id);
-          else state.expandedUnclassified.add(project.id);
-          render();
-        });
-        toggle.setAttribute("aria-expanded", String(disclosure.expanded));
-        toggle.disabled = disclosure.revealed;
-        caption.prepend(icon("chevron"));
-        toggle.append(caption);
-        cell.append(toggle);
-      } else {
-        cell.append(caption);
-      }
-      row.append(cell);
-      return row;
-    }
-
-    function groupedScriptRows(project, entries, waiting, pinSupported, revealUnclassified) {
-      const groups = {
-        pinned: [],
-        common: [],
-        automation: [],
-        unavailable: [],
-        unclassified: []
-      };
-      for (const entry of entries) groups[entry.task.pinned === true ? "pinned" : entry.usage.category].push(entry);
-      const sections = [
-        ["pinned", "pinnedScripts"],
-        ["common", "commonScripts"],
-        ["automation", "automationScripts"],
-        ["unavailable", "usageUnavailableScripts"],
-        ["unclassified", "unclassifiedScripts"]
-      ];
-
-      const rows = [];
-      for (const [category, label] of sections) {
-        const group = groups[category];
-        if (!group.length) continue;
-        const revealed = revealUnclassified || group.every(({ task }) => taskIsRunning(task));
-        const expanded = revealed || state.expandedUnclassified.has(project.id);
-        const disclosure = category === "unclassified" ? { expanded, revealed } : null;
-        rows.push(scriptSectionHeading(project, label, group.length, disclosure));
-        const shown = !disclosure || expanded ? group : group.filter(({ task }) => taskIsRunning(task));
-        for (const entry of shown) rows.push(scriptRow(project, entry, waiting, pinSupported));
-      }
-      return rows;
-    }
-
     function renderScripts(data, project, waiting) {
-      const entries = projectTasks(data, project).map((task) => ({
-        task, group: taskPackage(task), usage: taskUsage(task)
-      }));
+      const entries = projectTasks(data, project).map((task) => ({ task, group: taskPackage(task) }));
       renderPackages(entries);
 
       const query = state.scriptQuery.trim().toLocaleLowerCase(locale);
-      const revealUnclassified = Boolean(query || state.activeOnly || state.packageFilter);
-      const pinSupported = data.supportsScriptPins === true;
-      const update = ui["script-usage-update"];
-      update.hidden = pinSupported;
-      setText(update, pinSupported ? "" : t("usageUpdate"));
-      const visible = entries.filter(({ task, group, usage }) => (
+      const visible = entries.filter(({ task, group }) => (
         (!state.activeOnly || taskIsRunning(task)) &&
         (!state.packageFilter || state.packageFilter === packageChoice(group)) &&
-        textMatches(query, task.name, task.command, task.detail, group.name, group.path, ...usage.reasons)
+        textMatches(query, task.name, task.command, task.detail, group.name, group.path)
       ));
       ui["filter-all"].setAttribute("aria-pressed", String(!state.activeOnly));
       ui["filter-active"].setAttribute("aria-pressed", String(state.activeOnly));
@@ -1662,8 +1535,7 @@
         : !entries.length ? (project.scanning ? "scanningFiles" : noScriptsMessage)
         : query || state.packageFilter ? "noMatches" : "noActive";
       const signature = JSON.stringify([
-        locale, project.id, project.available, waiting, state.action, emptyMessage, pinSupported,
-        revealUnclassified, state.expandedUnclassified.has(project.id),
+        locale, project.id, project.available, waiting, state.action, emptyMessage,
         visible.map(({ task }) => task)
       ]);
 
@@ -1675,9 +1547,8 @@
       const list = ui["script-list"];
       const table = ui["script-rows"];
       const scrollPosition = list.scrollTop;
-      const focus = focusedKey(table) ?? (document.activeElement === document.body ? state.pinFocus : null);
-      if (!waiting) state.pinFocus = null;
-      const rows = groupedScriptRows(project, visible, waiting, pinSupported, revealUnclassified);
+      const focus = focusedKey(table);
+      const rows = visible.map(({ task, group }) => scriptRow(project, task, group, waiting));
       if (!rows.length) {
         const row = node("tr");
         const cell = node("td", "empty", t(emptyMessage, commandConfigPath));
@@ -1691,10 +1562,8 @@
       if (focus) {
         const [kind, projectId, taskId] = JSON.parse(focus);
         const next = findFocus(table, focus)
-          || (kind === "run" ? findFocus(table, JSON.stringify(["log", projectId, taskId])) : null)
-          || (kind === "pin-script" && !waiting && project.id === projectId
-            ? findFocus(table, JSON.stringify(["unclassified", projectId])) : null);
-        next?.focus({ preventScroll: kind !== "pin-script" });
+          || (kind === "run" ? findFocus(table, JSON.stringify(["log", projectId, taskId])) : null);
+        next?.focus({ preventScroll: true });
       }
     }
 
@@ -1861,8 +1730,6 @@
       ui.log.toggleAttribute("data-empty", !log);
       ui["log-bottom"].disabled = !log;
       ui["log-copy"].disabled = !log;
-      const count = log ? log.replace(/\n$/, "").split("\n").length : 0;
-      setText(ui["log-lines"], quantity(count, "oneLine", "lineCount"));
       const fix = ui["log-fix"];
       fix.hidden = !run || (!errors.length && run.kind !== "failed");
       fix.disabled = fix.hidden || state.fixPending || state.status !== "ready";
@@ -1956,14 +1823,16 @@
       ui.retry.disabled = picking || Boolean(state.action) || state.status === "connecting";
       ui["add-project"].disabled = waiting;
       setText(ui["add-project"].lastElementChild, t(picking ? "waitingForFolder" : "openProject"));
+      const loading = !state.initialLoadComplete && !state.transportError && !(state.actionError && !data);
       const scanning = state.action?.name === "refresh" || data?.projects.some((project) => project.scanning);
-      ui.scan.disabled = waiting || !data || scanning;
-      setText(ui.scan.lastElementChild, t(scanning ? "scanning" : "rescan"));
+      ui.scan.disabled = waiting || !state.initialLoadComplete || !data || scanning;
+      setText(ui.scan.lastElementChild, t(scanning && !loading ? "scanning" : "rescan"));
 
       const hasProjects = Boolean(data?.projects.length);
-      ui.dashboard.hidden = !hasProjects;
-      ui.welcome.hidden = hasProjects || Boolean(error && !data);
-      if (hasProjects) {
+      ui["project-loading"].hidden = !loading;
+      ui.dashboard.hidden = loading || !hasProjects;
+      ui.welcome.hidden = loading || hasProjects || Boolean(error && !data);
+      if (hasProjects && !loading) {
         const { projects } = data;
         const scripts = projects.reduce((count, project) => count + projectTasks(data, project).length, 0);
         setText(ui.counts, quantity(projects.length, "oneProject", "projectCount") + " · " +
