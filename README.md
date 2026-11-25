@@ -48,13 +48,6 @@ Script Manager highlights recognized error lines. For a failed run or recognized
 
 The sidebar follows the Codex interface language. The macOS window reads the Codex language when it opens and falls back to the system language. The Windows dashboard follows the browser language. Script output is displayed as written.
 
-If you installed the plugin using its former ID, remove that installation and marketplace after installing the current one:
-
-```bash
-codex plugin remove script-manager@codex-actions
-codex plugin marketplace remove codex-actions
-```
-
 ## Configure project commands
 
 Use `.codex/script-manager.json` in the project root to add noninteractive shell commands for any project. For example:
