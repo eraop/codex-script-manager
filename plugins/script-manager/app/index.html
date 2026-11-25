@@ -23,7 +23,7 @@
       --amber: #905200;
       --danger: #a22424;
       --mono: "SF Mono", Menlo, ui-monospace, monospace;
-      font: 14px/1.45 "Avenir Next", "PingFang SC", sans-serif;
+      font: 14px/1.45 "Avenir Next", "PingFang SC", "Segoe UI", sans-serif;
     }
 
     :root[data-theme="dark"] {
@@ -114,6 +114,8 @@
     .button.primary { border-color: var(--primary); background: var(--primary); color: var(--on-primary); font-weight: 700; }
     .button.primary:not(:disabled):hover { opacity: .88; background: var(--primary); }
     .actions { gap: 8px; }
+    .project-path-form { display: flex; gap: 8px; max-width: 600px; }
+    .project-path-form .search { flex-basis: 12ch; }
 
     .board {
       display: grid;
@@ -559,6 +561,15 @@
       </div>
     </header>
 
+    <form class="project-path-form" id="project-path-form" hidden>
+      <label class="search">
+        <span class="sr-only" data-text="folderPath">Project folder</span>
+        <input id="project-path-input" type="text" placeholder="C:\projects\my-app" required maxlength="8192">
+      </label>
+      <button class="button primary" type="submit" id="project-path-submit" data-text="openProject">Open Project</button>
+      <button class="button" type="button" id="project-path-cancel" data-text="cancel">Cancel</button>
+    </form>
+
     <div class="alert" id="error" hidden>
       <p id="error-text" role="alert"></p>
       <button class="button" id="retry" type="button">Reconnect</button>
@@ -665,6 +676,7 @@
     const preferenceKey = "script-manager-mcp.selection";
     const commandConfigPath = ".codex/script-manager.json";
     const peer = window.parent;
+    const browserSession = readBrowserSession();
     const requests = new Map();
     const browserTheme = window.matchMedia("(prefers-color-scheme: dark)");
     const messages = {
@@ -704,12 +716,15 @@
         jumpToEnd: "Jump to end",
         autoScroll: "Auto-scroll",
         openProject: "Open Project",
+        folderPath: "Project folder",
+        cancel: "Cancel",
+        fileExplorer: "File Explorer",
         openIn: "Open in",
         openInProject: "Open {value} in",
         waitingForFolder: "Waiting for folder…",
         selectProject: "Open a project",
         selectProjectHint: "Choose a local project folder to scan for runnable scripts.",
-        selectFolderHint: "Continue in the macOS folder picker.",
+        selectFolderHint: "Continue in the system folder picker.",
         connecting: "Connecting to Script Manager",
         loadingProjects: "Reading local projects.",
         scanningProjects: "Scanning projects…",
@@ -742,6 +757,7 @@
         timeout: "Script Manager connection timed out.",
         responseError: "Script Manager returned an error.",
         openInCodex: "Open Script Manager in Codex.",
+        reopenBrowser: "Open Script Manager again from your Codex project.",
         noHandshake: "Codex did not confirm the Script Manager connection.",
         operationError: "The Script Manager operation failed.",
         invalidSnapshot: "Could not read Script Manager data.",
@@ -783,12 +799,15 @@
         jumpToEnd: "跳到末尾",
         autoScroll: "自动滚动",
         openProject: "打开项目",
+        folderPath: "项目文件夹",
+        cancel: "取消",
+        fileExplorer: "文件资源管理器",
         openIn: "打开方式",
         openInProject: "选择打开「{value}」的应用",
         waitingForFolder: "等待选择文件夹…",
         selectProject: "打开一个项目",
         selectProjectHint: "选择本地项目文件夹，扫描可运行的脚本。",
-        selectFolderHint: "请在 macOS 文件夹选择窗口中继续。",
+        selectFolderHint: "请在系统文件夹选择窗口中继续。",
         connecting: "正在连接脚本管理",
         loadingProjects: "正在读取本地项目。",
         scanningProjects: "正在扫描项目…",
@@ -821,6 +840,7 @@
         timeout: "脚本管理连接超时。",
         responseError: "脚本管理返回错误。",
         openInCodex: "请在 Codex 中打开脚本管理。",
+        reopenBrowser: "请从 Codex 项目重新打开脚本管理。",
         noHandshake: "Codex 未确认脚本管理连接。",
         operationError: "脚本管理操作失败。",
         invalidSnapshot: "无法读取脚本管理数据。",
@@ -833,7 +853,8 @@
       "project-search", "project-list", "scope-info", "scope-controls", "command-config-error", "script-search",
       "filters", "filter-all", "filter-active", "package-filter", "script-list", "script-rows",
       "log", "log-tabs", "log-panel", "log-context", "log-title", "log-status", "log-auto",
-      "log-copy", "log-bottom", "copy-feedback", "log-fix"
+      "log-copy", "log-bottom", "copy-feedback", "log-fix", "project-path-form", "project-path-input",
+      "project-path-submit", "project-path-cancel"
     ];
     const ui = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
     const brandIcons = document.querySelectorAll("[data-brand-icon]");
@@ -846,7 +867,7 @@
       logSelection: null,
       logOutput: null,
       dismissedLogs: new Map(),
-      remembered: readPreference(),
+      remembered: browserSession?.project ? { projectId: browserSession.project } : readPreference(),
       revision: 0,
       action: null,
       transportError: null,
@@ -864,7 +885,7 @@
     let nextId = 0;
     let origin;
     let hostContext = {};
-    let documentLocale = document.documentElement.lang;
+    let documentLocale = browserSession ? navigator.language : document.documentElement.lang;
     let locale;
     let lastHeight;
     let lastProjectList;
@@ -929,6 +950,46 @@
       }
     }
 
+    function readBrowserSession() {
+      if (peer !== window || location.protocol !== "http:" || location.hostname !== "127.0.0.1") return null;
+      const fragment = new URLSearchParams(location.hash.slice(1));
+      let token = fragment.get("token");
+      try {
+        if (token) {
+          sessionStorage.setItem("script-manager-token", token);
+          history.replaceState(null, "", "/");
+        } else {
+          token = sessionStorage.getItem("script-manager-token");
+        }
+      } catch {
+        // Keep the fragment when session storage is unavailable.
+      }
+      return token ? { token, project: fragment.get("project") } : null;
+    }
+
+    async function browserRequest(path, params, timeout) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
+      try {
+        const headers = { Authorization: "Bearer " + browserSession.token };
+        if (params) headers["Content-Type"] = "application/json";
+        const response = await fetch(path, {
+          method: params ? "POST" : "GET",
+          headers,
+          body: params ? JSON.stringify(params) : undefined,
+          signal: controller.signal
+        });
+        if (response.status === 403 || response.status === 404) throw new LocalizedError("reopenBrowser");
+        if (!response.ok) throw new LocalizedError("responseError");
+        return await response.json();
+      } catch (error) {
+        if (error instanceof LocalizedError) throw error;
+        throw new LocalizedError(controller.signal.aborted ? "timeout" : "reconnectHint");
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
     function rememberSelection() {
       try {
         window.localStorage.setItem(preferenceKey, JSON.stringify({ projectId: state.projectId, log: state.logSelection }));
@@ -943,6 +1004,7 @@
     }
 
     function request(method, params, timeout = 12000) {
+      if (browserSession) return browserRequest("/tool", params, timeout);
       return new Promise((resolve, reject) => {
         const id = ++nextId;
         const timer = setTimeout(() => {
@@ -983,7 +1045,7 @@
     }
 
     function reportSize() {
-      if (state.status !== "ready" || hostContext.displayMode === "fullscreen") return;
+      if (browserSession || state.status !== "ready" || hostContext.displayMode === "fullscreen") return;
       const height = Math.ceil(ui.app.getBoundingClientRect().height);
       if (height === lastHeight) return;
       lastHeight = height;
@@ -1025,16 +1087,21 @@
       state.transportError = null;
       render();
       try {
-        if (peer === window) throw new LocalizedError("openInCodex");
-        const host = await request("ui/initialize", {
-          protocolVersion: "2026-01-26",
-          appInfo: { name: "script-manager", version: "__SCRIPT_MANAGER_VERSION__" },
-          appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] }
-        }, 8000);
-        if (!host?.protocolVersion) throw new LocalizedError("noHandshake");
+        if (browserSession) {
+          await browserRequest("/health", null, 8000);
+        } else {
+          if (peer === window) throw new LocalizedError("openInCodex");
+          const host = await request("ui/initialize", {
+            protocolVersion: "2026-01-26",
+            appInfo: { name: "script-manager", version: "__SCRIPT_MANAGER_VERSION__" },
+            appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] }
+          }, 8000);
+          if (!host?.protocolVersion) throw new LocalizedError("noHandshake");
+          if (state.status === "closed") return;
+          applyHostContext(host.hostContext);
+          send({ method: "ui/notifications/initialized" });
+        }
         if (state.status === "closed") return;
-        applyHostContext(host.hostContext);
-        send({ method: "ui/notifications/initialized" });
         state.status = "ready";
         reportSize();
         schedule(0);
@@ -1128,7 +1195,7 @@
       setLogSelection(target?.project.id, target?.task.id);
     }
 
-    function adoptSnapshot(next) {
+    function adoptSnapshot(next, addedProject) {
       const previous = state.snapshot;
       state.snapshot = next;
       if (!next.projects.some((project) => project.scanning)) state.initialLoadComplete = true;
@@ -1143,7 +1210,7 @@
       state.remembered = null;
       const picked = previous?.pickPending && !next.pickPending
         && next.selectedProjectId !== previous.selectedProjectId ? next.selectedProjectId : null;
-      const candidates = [picked, state.projectId, remembered?.scopeProjectId, remembered?.projectId,
+      const candidates = [addedProject, picked, state.projectId, remembered?.scopeProjectId, remembered?.projectId,
         next.selectedProjectId];
       const project = candidates.map((id) => next.projects.find((item) => item.id === id)).find(Boolean)
         ?? next.projects[0];
@@ -1183,7 +1250,9 @@
         const next = parseSnapshot(response, requestLocale);
         state.transportError = null;
         if (action?.closeLog) dismissLog(next, action.args);
-        if (revision === state.revision || action?.closeLog) adoptSnapshot(next);
+        const addedProject = action?.name === "add" ? next.selectedProjectId : null;
+        if (addedProject) closeProjectPathForm();
+        if (revision === state.revision || action?.closeLog || addedProject) adoptSnapshot(next, addedProject);
       } catch (error) {
         if (state.status !== "closed") {
           if (action) state.actionError = error;
@@ -1385,7 +1454,8 @@
       if (!isOpen) return menu;
 
       const options = node("div", "project-menu-options");
-      for (const [destination, name, symbol] of [["finder", "Finder", "folder"], ["vscode", "VS Code", "code"]]) {
+      const fileManager = state.snapshot?.platform === "windows" ? ["file_manager", t("fileExplorer")] : ["finder", "Finder"];
+      for (const [destination, name, symbol] of [[...fileManager, "folder"], ["vscode", "VS Code", "code"]]) {
         const item = button("", "", [destination, project.id], () => {
           state.menuProjectId = null;
           queueAction("open", { projectId: project.id, destination });
@@ -1823,6 +1893,8 @@
       ui.retry.disabled = picking || Boolean(state.action) || state.status === "connecting";
       ui["add-project"].disabled = waiting;
       setText(ui["add-project"].lastElementChild, t(picking ? "waitingForFolder" : "openProject"));
+      ui["project-path-submit"].disabled = waiting;
+      ui["project-path-cancel"].disabled = state.action?.name === "add";
       const loading = !state.initialLoadComplete && !state.transportError && !(state.actionError && !data);
       const scanning = state.action?.name === "refresh" || data?.projects.some((project) => project.scanning);
       ui.scan.disabled = waiting || !state.initialLoadComplete || !data || scanning;
@@ -1886,7 +1958,28 @@
       findFocus(ui["scope-controls"], key)?.focus();
     }
 
-    ui["add-project"].addEventListener("click", () => queueAction("choose"));
+    function closeProjectPathForm() {
+      ui["project-path-form"].reset();
+      ui["project-path-form"].hidden = true;
+    }
+
+    ui["add-project"].addEventListener("click", () => {
+      if (!state.snapshot?.usesPathPicker) {
+        queueAction("choose");
+        return;
+      }
+      ui["project-path-form"].hidden = false;
+      ui["project-path-input"].focus();
+    });
+    ui["project-path-form"].addEventListener("submit", (event) => {
+      event.preventDefault();
+      const path = ui["project-path-input"].value;
+      if (path.trim()) queueAction("add", { path });
+    });
+    ui["project-path-cancel"].addEventListener("click", () => {
+      closeProjectPathForm();
+      ui["add-project"].focus();
+    });
     ui.scan.addEventListener("click", () => queueAction("refresh"));
     ui["project-search"].addEventListener("input", () => {
       state.projectQuery = ui["project-search"].value;
@@ -1927,7 +2020,12 @@
     document.addEventListener("keydown", dismissMenu);
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("message", onMessage);
-    window.addEventListener("pagehide", dispose, { once: true });
+    window.addEventListener("pagehide", (event) => {
+      if (!event.persisted) dispose();
+    });
+    window.addEventListener("pageshow", (event) => {
+      if (event.persisted) schedule(0);
+    });
     browserTheme.addEventListener("change", applyTheme);
     const observer = new ResizeObserver(reportSize);
     observer.observe(ui.app);

@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
-from urllib.parse import quote, unquote, urlencode, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
+from urllib.request import url2pathname
 
 
 LOG_ERROR = re.compile(
@@ -64,7 +65,7 @@ def redact(text):
 
 
 def project_root(path):
-    if not isinstance(path, str) or not path.startswith("/") or "\x00" in path:
+    if not isinstance(path, str) or "\x00" in path or not Path(path).is_absolute():
         return None
     try:
         directory = Path(path).resolve(strict=True)
@@ -75,7 +76,7 @@ def project_root(path):
 
 def working_directory(task, root):
     path = task.get("packagePath")
-    if isinstance(path, str) and not path.startswith("/"):
+    if isinstance(path, str) and not Path(path).anchor:
         candidate = root / path
     else:
         try:
@@ -84,7 +85,10 @@ def working_directory(task, root):
             return "."
         if task_url.scheme != "file" or task_url.netloc not in ("", "localhost") or not task_url.path.startswith("/"):
             return "."
-        candidate = Path(unquote(task_url.path))
+        try:
+            candidate = Path(url2pathname(task_url.path))
+        except (OSError, ValueError):
+            return "."
     try:
         return candidate.resolve().relative_to(root).as_posix()
     except (OSError, RuntimeError, ValueError):

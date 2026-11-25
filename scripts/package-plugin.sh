@@ -42,7 +42,7 @@ trap cleanup EXIT
 
 mkdir -p "$staged_marketplace/.agents/plugins" "$staged_plugin"
 cp "$repo_dir/plugins/marketplace.json" "$staged_marketplace/.agents/plugins/marketplace.json"
-cp "$plugin_source/plugin.json" "$plugin_source/mcp.json" "$plugin_source/server.py" "$plugin_source/repair.py" "$staged_plugin/"
+cp "$plugin_source/plugin.json" "$plugin_source/mcp.json" "$plugin_source"/*.py "$staged_plugin/"
 cp -R "$plugin_source/app" "$plugin_source/assets" "$plugin_source/skills" "$staged_plugin/"
 
 mkdir -p "$bundle/Contents/MacOS"

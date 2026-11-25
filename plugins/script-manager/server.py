@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 
+import portable_bridge
 import repair
 
 
@@ -28,7 +29,8 @@ PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_VERSIONS = {PROTOCOL_VERSION, "2025-06-18", "2025-03-26"}
 MAX_REQUEST_SIZE = 16 * 1024
 MAX_RESPONSE_SIZE = 8 * 1024 * 1024
-OPEN_DESTINATIONS = ("finder", "vscode")
+WINDOWS = sys.platform == "win32"
+OPEN_DESTINATIONS = ("file_manager" if WINDOWS else "finder", "vscode")
 ICON_ASSETS = {
     theme: (PLUGIN_DIR / INTERFACE[field]).read_bytes()
     for field, theme in (("logo", "light"), ("logoDark", "dark"))
@@ -56,11 +58,13 @@ OPERATIONS = {
     "snapshot": ("Read projects, task status, and logs.", ("projectId", "taskId"), ()),
     "choose": ("Open the local project folder picker.", (), ()),
     "refresh": ("Rescan all projects or a single project.", ("projectId",), ()),
-    "open": ("Open a known project in Finder or Visual Studio Code.", ("projectId", "destination"), ("projectId", "destination")),
+    "open": ("Open a known project in the file manager or Visual Studio Code.", ("projectId", "destination"), ("projectId", "destination")),
     "start": ("Start a script discovered in the project.", ("projectId", "taskId"), ("projectId", "taskId")),
     "stop": ("Stop a task managed by Script Manager.", ("projectId", "taskId"), ("projectId", "taskId")),
     "ai_fix": ("Open a Codex draft to diagnose a script failure.", ("projectId", "taskId"), ("projectId", "taskId")),
 }
+if WINDOWS:
+    OPERATIONS["add"] = ("Add a local project folder by its absolute path.", ("path",), ("path",))
 RESOURCE = {"uri": RESOURCE_URI, "name": APP_TITLE, "mimeType": RESOURCE_MIME}
 
 
@@ -99,7 +103,7 @@ def tools():
     yield {
         "name": ENTRY_TOOL,
         "title": APP_TITLE,
-        "description": "Open Script Manager for local macOS projects.",
+        "description": "Open Script Manager for local macOS or Windows projects.",
         "inputSchema": object_schema(),
         "annotations": {"readOnlyHint": True, "openWorldHint": False},
         "icons": SIDEBAR_ICONS,
@@ -168,6 +172,8 @@ def launch_bridge(socket_dir_override):
 
 
 def bridge_connection():
+    if sys.platform != "darwin":
+        raise BridgeError("Script Manager requires macOS or native Windows.", "脚本管理需要 macOS 或原生 Windows。")
     socket_dir_override = os.environ.get(SOCKET_DIR_ENV)
     directory = Path(socket_dir_override or f"/tmp/codex-script-manager-{os.getuid()}")
     if not directory.is_absolute():
@@ -277,12 +283,15 @@ def open_repair_draft(data, arguments, locale):
         raise BridgeError("AI Fix needs a failed run or an error in its log.", "AI 修复需要一次失败的运行或日志中的错误。")
     url = repair.draft_url(root, task, log, indices, chinese=translate(locale, False, True))
     try:
-        subprocess.run(["/usr/bin/open", url], stdin=subprocess.DEVNULL, capture_output=True, timeout=3, check=True)
+        if WINDOWS:
+            os.startfile(url)
+        else:
+            subprocess.run(["/usr/bin/open", url], stdin=subprocess.DEVNULL, capture_output=True, timeout=3, check=True)
     except (OSError, subprocess.SubprocessError) as error:
         raise BridgeError("Could not open the Codex repair draft.", "无法打开 Codex 修复草稿。") from error
 
 
-def call_tool(params):
+def call_tool(params, *, bridge=None):
     name, arguments = params.get("name"), params.get("arguments", {})
     meta = params.get("_meta")
     locale = meta.get("openai/locale") if isinstance(meta, dict) else None
@@ -309,7 +318,12 @@ def call_tool(params):
     ):
         return tool_result(invalid_arguments, error=True)
     try:
-        data = bridge_call("snapshot" if operation == "ai_fix" else operation, arguments)
+        if bridge is None and WINDOWS:
+            try:
+                return portable_bridge.call_tool(params)
+            except (OSError, portable_bridge.ConnectionError) as error:
+                raise BridgeError("Could not connect to Script Manager on Windows.", "无法连接 Windows 脚本管理。") from error
+        data = (bridge or bridge_call)("snapshot" if operation == "ai_fix" else operation, arguments)
         if data.get("schemaVersion") != 2:
             raise BridgeError(
                 "An older Script Manager is running. Quit it after your scripts finish, then reconnect.",
@@ -319,10 +333,18 @@ def call_tool(params):
         if operation == "ai_fix":
             open_repair_draft(data, arguments, locale)
             return tool_result(translate(locale, "Codex repair draft opened.", "已打开 Codex 修复草稿。"), data={"opened": True})
-        add_pins_for_older_bridge(data)
+        if not WINDOWS:
+            add_pins_for_older_bridge(data)
     except BridgeError as error:
         return tool_result(error.localized(locale), error=True)
     return tool_result(translate(locale, "Script Manager status loaded.", "已获取脚本管理状态。"), data=data)
+
+
+def resource_html():
+    html = (PLUGIN_DIR / "app" / "index.html").read_text(encoding="utf-8")
+    for icon in BRAND_ICONS:
+        html = html.replace(f"__SCRIPT_MANAGER_ICON_{icon['theme'].upper()}__", icon["src"])
+    return html.replace("__SCRIPT_MANAGER_VERSION__", MANIFEST["version"])
 
 
 def dispatch(method, params):
@@ -353,15 +375,11 @@ def dispatch(method, params):
     if method == "resources/read":
         if params.get("uri") != RESOURCE_URI:
             raise RpcError(-32002, "Resource not found")
-        html = (PLUGIN_DIR / "app" / "index.html").read_text(encoding="utf-8")
-        for icon in BRAND_ICONS:
-            html = html.replace(f"__SCRIPT_MANAGER_ICON_{icon['theme'].upper()}__", icon["src"])
-        html = html.replace("__SCRIPT_MANAGER_VERSION__", MANIFEST["version"])
         return {
             "contents": [{
                 "uri": RESOURCE_URI,
                 "mimeType": RESOURCE_MIME,
-                "text": html,
+                "text": resource_html(),
                 "_meta": {"ui": {"permissions": {"clipboardWrite": {}}, "prefersBorder": False}},
             }],
         }
