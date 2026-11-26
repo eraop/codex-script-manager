@@ -123,10 +123,12 @@ def tools():
         },
     }
     if sys.platform == "darwin":
+        schema = object_schema(("projectId",))
+        schema["properties"]["locale"] = {"type": "string", "enum": ["en", "zh-CN"]}
         yield {
             "name": OPEN_FLOATING_WINDOW_TOOL,
             "description": "Bring the macOS Script Manager floating window forward.",
-            "inputSchema": object_schema(),
+            "inputSchema": schema,
             "annotations": {"readOnlyHint": True, "openWorldHint": False},
             "_meta": {"ui": {"visibility": ["app"]}},
         }
@@ -335,13 +337,21 @@ def call_tool(params, *, bridge=None):
             return tool_result(invalid_arguments, error=True)
         return tool_result(translate(locale, "Script Manager is open.", "脚本管理已打开。"))
     if name == OPEN_FLOATING_WINDOW_TOOL and sys.platform == "darwin":
-        if arguments != {}:
+        if not isinstance(arguments, dict) or arguments.keys() - {"projectId", "locale"}:
+            return tool_result(invalid_arguments, error=True)
+        project = arguments.get("projectId")
+        if (
+            ("projectId" in arguments and (
+                not isinstance(project, str) or not project.startswith("/") or "\x00" in project or len(project) > 8192
+            ))
+            or ("locale" in arguments and locale not in ("en", "zh-CN"))
+        ):
             return tool_result(invalid_arguments, error=True)
         try:
-            (bridge or bridge_call)("revealNative", {})
+            (bridge or bridge_call)("revealNative", arguments)
         except BridgeError as error:
             return tool_result(error.localized(locale), error=True)
-        return tool_result(translate(locale, "Script Manager floating window opened.", "已打开脚本管理浮窗。"))
+        return tool_result(translate(locale, "Script Manager floating window opened.", "已打开脚本管理浮窗。"), data={"opened": True})
     operation = name.removeprefix(f"{ENTRY_TOOL}_")
     if operation == name or operation not in OPERATIONS:
         raise RpcError(-32602, "Unknown tool")
@@ -382,6 +392,7 @@ def resource_html():
     html = (PLUGIN_DIR / "app" / "index.html").read_text(encoding="utf-8")
     for icon in BRAND_ICONS:
         html = html.replace(f"__SCRIPT_MANAGER_ICON_{icon['theme'].upper()}__", icon["src"])
+    html = html.replace("__SCRIPT_MANAGER_FLOATING_WINDOW__", "true" if sys.platform == "darwin" else "false")
     return html.replace("__SCRIPT_MANAGER_VERSION__", MANIFEST["version"])
 
 
