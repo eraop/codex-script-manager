@@ -11,11 +11,33 @@ The sidebar and chat skill share the same script runner within each environment.
 
 ## Install the plugin
 
-Use a Codex version that supports local plugins and install Python 3.9 or later. Run the commands for your environment from this repository's root.
+Use the Codex desktop app with local plugin support and Python 3.9 or later.
 
-### macOS
+- On macOS, put `python3` on your `PATH`. [Desktop app requirements](https://help.openai.com/en/articles/9275200-downloading-the-chatgpt-macos-app)
+- On Windows, put `python` on your `PATH` and set the Codex agent to **Windows native**. [Windows desktop settings](https://learn.chatgpt.com/docs/windows/windows-app#windows-subsystem-for-linux-wsl)
 
-You need macOS 13 or later, Xcode or Command Line Tools, and `python3` on your `PATH`.
+### Install from the Git repository
+
+1. In the Codex plugin directory, choose **Add → Add a marketplace**.
+2. Enter the repository's Git clone URL in **Source**, such as `git@github.com:eraop/codex-script-manager.git`. If you use an SSH host alias, enter the clone URL that works with your Git credentials.
+3. Set **Git ref** to the branch for your platform and leave **Sparse paths** empty.
+
+   | Platform | Git ref |
+   | --- | --- |
+   | macOS (Apple silicon and Intel) | `marketplace-macos` |
+   | Windows native | `marketplace-windows` |
+
+4. Select **Add marketplace**, open **Script Manager** in the **Codex Script Manager** marketplace, and choose **Install**.
+
+The publishing workflow builds and publishes both branches when packaging inputs change on `main`. It can also run manually from `main`. [Publish plugin marketplaces](.github/workflows/publish-marketplaces.yml)
+
+### Build from source
+
+Run the commands for your platform from the repository root with `codex` available on your `PATH`.
+
+#### macOS
+
+Install Xcode or Command Line Tools to build the native app for macOS 13 or later.
 
 ```bash
 ./scripts/package-plugin.sh
@@ -23,9 +45,7 @@ codex plugin marketplace add "$(pwd -P)/build/codex-marketplace"
 codex plugin add script-manager@codex-script-manager
 ```
 
-### Native Windows
-
-Use PowerShell with Windows Python available as `python` and the Windows Codex CLI available as `codex`.
+#### Windows native
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\scripts\package-plugin.ps1
@@ -33,8 +53,6 @@ $marketplace = (Resolve-Path .\build\codex-marketplace-windows).Path
 codex plugin marketplace add $marketplace
 codex plugin add script-manager@codex-script-manager
 ```
-
-Keep the desktop app's agent set to **Windows native**. [Windows desktop settings](https://learn.chatgpt.com/docs/windows/windows-app#windows-subsystem-for-linux-wsl)
 
 ### Open Script Manager
 

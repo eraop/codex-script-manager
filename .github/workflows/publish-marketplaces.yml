@@ -1,0 +1,81 @@
+name: Publish plugin marketplaces
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-marketplaces.yml'
+      - 'apps/macos/**'
+      - 'plugins/**'
+      - 'scripts/package-plugin.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-plugin-marketplaces
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-26
+            branch: marketplace-macos
+            package: build/codex-marketplace
+          - runner: windows-2025
+            branch: marketplace-windows
+            package: build/codex-marketplace-windows
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: Build the macOS marketplace
+        if: runner.os == 'macOS'
+        run: ./scripts/package-plugin.sh --universal
+
+      - name: Build the Windows marketplace
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/package-plugin.ps1
+
+      - name: Publish ${{ matrix.branch }}
+        shell: bash
+        env:
+          MARKETPLACE_BRANCH: ${{ matrix.branch }}
+          MARKETPLACE_DIR: ${{ matrix.package }}
+        run: |
+          set -u
+          test -f "$MARKETPLACE_DIR/.agents/plugins/marketplace.json"
+          # Preserve package bytes across Git checkouts, including the signed macOS bundle.
+          printf '%s\n' '* -text' > "$MARKETPLACE_DIR/.gitattributes"
+
+          marketplace_ref="refs/heads/$MARKETPLACE_BRANCH"
+          git_dir="$(git rev-parse --absolute-git-dir)"
+          index_dir="$(mktemp -d "$git_dir/marketplace.XXXXXX")"
+          trap 'rm -rf -- "$index_dir"' EXIT
+          export GIT_INDEX_FILE="$index_dir/index"
+          git -C "$MARKETPLACE_DIR" --git-dir="$git_dir" --work-tree=. add --all --force
+          tree="$(git write-tree)"
+
+          set --
+          existing_ref="$(git ls-remote --refs origin "$marketplace_ref")"
+          if [[ -n "$existing_ref" ]]; then
+            git fetch --depth=1 --no-tags origin "$marketplace_ref"
+            if [[ "$tree" == "$(git rev-parse 'FETCH_HEAD^{tree}')" ]]; then
+              exit 0
+            fi
+            set -- -p FETCH_HEAD
+          fi
+
+          source_commit="$(git rev-parse --short HEAD)"
+          package_commit="$(git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit-tree "$tree" "$@" -m "chore: publish $MARKETPLACE_BRANCH from $source_commit")"
+          git push origin "$package_commit:$marketplace_ref"

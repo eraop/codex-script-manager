@@ -1,6 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
+if [[ $# -gt 1 || ( $# -eq 1 && ${1:-} != --universal ) ]]; then
+    printf 'Usage: %s [--universal]\n' "$0" >&2
+    exit 2
+fi
+
 repo_dir="$(cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source_dir="$repo_dir/apps/macos"
 plugin_name=script-manager
@@ -49,15 +54,30 @@ mkdir -p "$bundle/Contents/MacOS"
 cp "$plist" "$bundle/Contents/Info.plist"
 /usr/bin/plutil -lint -s "$bundle/Contents/Info.plist"
 
-"$swiftc" -swift-version 5 -O \
-    -target "$(uname -m)-apple-macosx13.0" \
-    -sdk "$sdk" \
-    -module-cache-path "$staging/ModuleCache" \
-    "${sources[@]}" \
-    -o "$bundle/Contents/MacOS/$executable"
+compile_app() {
+    local architecture="$1"
+    local destination="$2"
+    "$swiftc" -swift-version 5 -O \
+        -target "$architecture-apple-macosx13.0" \
+        -sdk "$sdk" \
+        -module-cache-path "$staging/ModuleCache/$architecture" \
+        "${sources[@]}" \
+        -o "$destination"
+}
+
+app_executable="$bundle/Contents/MacOS/$executable"
+if [[ ${1:-} == --universal ]]; then
+    compile_app arm64 "$staging/app-arm64"
+    compile_app x86_64 "$staging/app-x86_64"
+    /usr/bin/xcrun lipo -create "$staging/app-arm64" "$staging/app-x86_64" -output "$app_executable"
+    /usr/bin/xcrun lipo "$app_executable" -verify_arch arm64
+    /usr/bin/xcrun lipo "$app_executable" -verify_arch x86_64
+else
+    compile_app "$(uname -m)" "$app_executable"
+fi
 
 /usr/bin/codesign --force --sign - "$bundle"
-/usr/bin/codesign --verify --strict "$bundle"
+/usr/bin/codesign --verify --strict --all-architectures "$bundle"
 
 if [[ -e "$marketplace" || -L "$marketplace" ]]; then
     previous_manifest="$marketplace/.agents/plugins/marketplace.json"
