@@ -66,6 +66,15 @@ OPERATIONS = {
     "stop": ("Stop a task managed by Script Manager.", ("projectId", "taskId"), ("projectId", "taskId")),
     "ai_fix": ("Open a Codex draft to diagnose a script failure.", ("projectId", "taskId"), ("projectId", "taskId")),
 }
+EXTERNAL_OPERATIONS = {
+    "external_processes": ("List external processes for the selected project.", ("projectId",), ("projectId",)),
+    "external_log": ("Read the latest output from a verified external process log file.",
+                     ("projectId", "processId", "stream"), ("projectId", "processId", "stream")),
+    "stop_external": ("Stop a confirmed external process in the selected project.",
+                      ("projectId", "processId"), ("projectId", "processId")),
+}
+if sys.platform in ("darwin", "win32"):
+    OPERATIONS.update(EXTERNAL_OPERATIONS)
 if WINDOWS:
     OPERATIONS["add"] = ("Add a local project folder by its absolute path.", ("path",), ("path",))
 RESOURCE = {"uri": RESOURCE_URI, "name": APP_TITLE, "mimeType": RESOURCE_MIME}
@@ -141,7 +150,8 @@ def tools():
             "name": f"{ENTRY_TOOL}_{name}",
             "description": description,
             "inputSchema": schema,
-            "annotations": {"readOnlyHint": name == "snapshot", "destructiveHint": name == "stop",
+            "annotations": {"readOnlyHint": name in ("snapshot", "external_processes", "external_log"),
+                            "destructiveHint": name in ("stop", "stop_external"),
                             **({"idempotentHint": True} if name == "add_command" else {})},
             "_meta": {"ui": {"resourceUri": RESOURCE_URI, "visibility": ["app"]}},
         }
@@ -370,6 +380,11 @@ def call_tool(params, *, bridge=None):
             try:
                 return portable_bridge.call_tool(params)
             except (OSError, portable_bridge.ConnectionError) as error:
+                if isinstance(error, portable_bridge.UnsupportedTool) and operation in EXTERNAL_OPERATIONS:
+                    raise BridgeError(
+                        "An older Script Manager runner is active. After your scripts finish, restart Windows and reopen Script Manager.",
+                        "旧版 Script Manager 后台服务仍在运行。请等脚本结束后重启 Windows，再打开脚本管理。",
+                    ) from error
                 raise BridgeError("Could not connect to Script Manager on Windows.", "无法连接 Windows 脚本管理。") from error
         data = (bridge or bridge_call)("snapshot" if operation == "ai_fix" else operation, arguments)
         if data.get("schemaVersion") != 2:
@@ -377,6 +392,8 @@ def call_tool(params, *, bridge=None):
                 "An older Script Manager is running. Quit it after your scripts finish, then reconnect.",
                 "旧版脚本管理仍在运行。请等脚本结束后退出旧版，再重新连接。",
             )
+        if operation in EXTERNAL_OPERATIONS:
+            return tool_result(translate(locale, "External process details updated.", "外部进程信息已更新。"), data=data)
         data["logErrorLines"] = repair.error_lines(data.get("log"))
         if operation == "ai_fix":
             open_repair_draft(data, arguments, locale)
@@ -384,6 +401,11 @@ def call_tool(params, *, bridge=None):
         if not WINDOWS:
             add_pins_for_older_bridge(data)
     except BridgeError as error:
+        if operation in EXTERNAL_OPERATIONS and str(error) in ("Unknown Script Manager operation.", "未知的脚本管理操作。"):
+            error = BridgeError(
+                "An older Script Manager is running. Quit it after your scripts finish, then reopen Script Manager.",
+                "旧版脚本管理仍在运行。请等脚本结束后退出旧版，再重新打开脚本管理。",
+            )
         return tool_result(error.localized(locale), error=True)
     return tool_result(translate(locale, "Script Manager status loaded.", "已获取脚本管理状态。"), data=data)
 
@@ -393,6 +415,7 @@ def resource_html():
     for icon in BRAND_ICONS:
         html = html.replace(f"__SCRIPT_MANAGER_ICON_{icon['theme'].upper()}__", icon["src"])
     html = html.replace("__SCRIPT_MANAGER_FLOATING_WINDOW__", "true" if sys.platform == "darwin" else "false")
+    html = html.replace("__SCRIPT_MANAGER_EXTERNAL_PROCESSES__", "true" if sys.platform in ("darwin", "win32") else "false")
     return html.replace("__SCRIPT_MANAGER_VERSION__", MANIFEST["version"])
 
 

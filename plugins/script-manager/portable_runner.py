@@ -28,6 +28,7 @@ from repair import ANSI
 
 LOG_LIMIT = 120_000
 ACTIVE = {"running", "stopping"}
+EXTERNAL_METHODS = {"external_processes", "external_log", "stop_external"}
 STATUS_LABELS = {
     "idle": ("Idle", "未运行"),
     "running": ("Running", "运行中"),
@@ -788,7 +789,41 @@ class Runner:
             "usesPathPicker": self._picker_program is None, "platform": "windows", "fileManager": "explorer",
         }
 
+    def _call_external(self, method, arguments):
+        import windows_external_logs as logs
+        import windows_external_processes as processes
+
+        def inspect(scope):
+            if method == "external_processes":
+                return {"processes": processes.scan(*scope, log_sources=logs.sources)}
+            process_id = arguments.get("processId")
+            if method == "stop_external":
+                processes.stop(process_id, *scope)
+                return {"stopping": True}
+            with processes.open_verified(process_id, *scope, logs=True) as (record, process_handle):
+                return {"log": logs.read(process_handle, record["handles"], arguments.get("stream"))}
+
+        try:
+            with self._lock:
+                if self._closed:
+                    raise PortableError("Script Manager has quit.", "脚本管理器已退出。")
+                self._sync_projects()
+                project = self.projects.get(arguments.get("projectId"))
+                if project is None or not project.available:
+                    raise PortableError("This project folder is unavailable.", "该项目目录不可用。")
+                other_roots = tuple(root for item in self.projects.values() if item is not project
+                                    for root in item.available_roots)
+                managed_pids = {run.tree.process.pid for run in self.runs.values() if run.tree is not None}
+                scope = (project.available_roots, other_roots, managed_pids)
+                if method == "stop_external":
+                    return {"schemaVersion": 2, **inspect(scope)}
+            return {"schemaVersion": 2, **inspect(scope)}
+        except (processes.ExternalProcessError, logs.ExternalLogError) as error:
+            raise PortableError(str(error), error.chinese) from error
+
     def call(self, method, arguments):
+        if method in EXTERNAL_METHODS:
+            return self._call_external(method, arguments)
         with self._lock:
             if self._closed:
                 raise PortableError("Script Manager has quit.", "脚本管理器已退出。")

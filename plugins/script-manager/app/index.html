@@ -110,6 +110,7 @@
       background: var(--raised);
       white-space: nowrap;
     }
+    .button.icon-only { inline-size: 34px; padding-inline: 0; border: 0; background: transparent; }
     .button:not(:disabled):hover { background: var(--hover); }
     .button.primary { border-color: var(--primary); background: var(--primary); color: var(--on-primary); font-weight: 700; }
     .button.primary:not(:disabled):hover { opacity: .88; background: var(--primary); }
@@ -261,6 +262,17 @@
       font-weight: 600;
     }
     .filter[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+    .toolbar[data-external] > :not(#external-processes, #external-refresh) { display: none; }
+    .external-list { list-style: none; margin: 0; padding: 0 2px 8px; }
+    .external-row { display: block; text-align: start; padding-block: 6px; }
+    .external-row > span { display: block; }
+    .external-row .log-detail { font-weight: 400; }
+    .external-feedback { margin: 4px 2px; }
+    .external-log-header { flex-wrap: wrap; }
+    .external-log-header .package-filter { max-width: min(58%, 240px); }
+    .external-confirm { flex: none; padding: 8px 12px; border-top: 1px solid var(--border); }
+    .external-confirm p { margin-bottom: 6px; overflow-wrap: anywhere; }
+    .external-confirm .button:last-child { color: var(--danger); }
 
     .table-frame { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; overflow-anchor: none; scrollbar-gutter: stable; }
     .scripts { width: 100%; border-spacing: 0; table-layout: fixed; }
@@ -522,8 +534,6 @@
       .masthead .button { padding-inline: 7px; }
       .masthead .actions { margin-inline-start: auto; }
       .masthead .counts { font-size: 12px; }
-      #open-floating-window { min-inline-size: 34px; }
-      #open-floating-window span { display: none; }
       .workspace { grid-template-columns: minmax(105px, .45fr) minmax(0, 1fr); }
       .panel-header h2 { font-size: 16px; }
       .project-panel { padding: 0 4px 4px; }
@@ -585,7 +595,7 @@
         <p class="counts" id="counts"></p>
       </div>
       <div class="actions">
-        <button class="button" id="open-floating-window" type="button" data-supported="__SCRIPT_MANAGER_FLOATING_WINDOW__" hidden disabled><svg class="icon" aria-hidden="true"><use href="#i-floating-window"/></svg><span>Open Floating Window</span></button>
+        <button class="button icon-only" id="open-floating-window" type="button" data-supported="__SCRIPT_MANAGER_FLOATING_WINDOW__" aria-label="Open Floating Window" hidden disabled><svg class="icon" aria-hidden="true"><use href="#i-floating-window"/></svg></button>
         <button class="button" id="scan" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span>Rescan</span></button>
         <button class="button primary" id="add-project" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#i-add"/></svg><span>Open Project</span></button>
       </div>
@@ -639,7 +649,7 @@
           </header>
           <p class="command-config-error" id="command-config-error" role="alert" hidden></p>
           <span class="sr-only" id="command-feedback" role="status"></span>
-          <div class="toolbar">
+          <div class="toolbar" id="script-toolbar">
             <label class="search">
               <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
               <input id="script-search" type="search" placeholder="Search scripts" aria-label="Search scripts">
@@ -652,6 +662,8 @@
               <button class="filter" id="filter-all" type="button" aria-pressed="true" data-text="all">All</button>
               <button class="filter" id="filter-active" type="button" aria-pressed="false" data-text="active">Active</button>
             </div>
+            <button class="button" id="external-processes" type="button" data-supported="__SCRIPT_MANAGER_EXTERNAL_PROCESSES__" data-text="externalProcesses" hidden>External Processes</button>
+            <button class="button icon-only" id="external-refresh" type="button" hidden><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg></button>
           </div>
           <div class="table-frame" id="script-list" role="region" aria-labelledby="scope-title" tabindex="0">
             <table class="scripts" id="scripts">
@@ -666,10 +678,15 @@
               </thead>
             </table>
           </div>
+          <div class="table-frame" id="external-list" hidden>
+            <p class="command-config-error external-feedback" id="external-error" role="alert" hidden></p>
+            <p class="project-caption" id="external-status" role="status" hidden></p>
+            <ul class="external-list" id="external-rows"></ul>
+          </div>
         </section>
       </div>
 
-      <section class="terminal" aria-labelledby="log-heading">
+      <section class="terminal" id="managed-terminal" aria-labelledby="log-heading">
         <div class="panel-header log-header">
           <div class="heading">
             <span class="brand-icon"><img data-brand-icon alt=""></span>
@@ -696,6 +713,26 @@
           </div>
         </div>
         <span class="sr-only" id="copy-feedback" role="status"></span>
+      </section>
+      <section class="terminal" id="external-terminal" aria-labelledby="external-log-heading" hidden>
+        <div class="panel-header log-header external-log-header">
+          <h2 id="external-log-heading" data-text="externalLogs">External Logs</h2>
+          <div class="actions">
+            <label class="package-filter" id="external-source-group" hidden>
+              <select id="external-source"></select>
+              <svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>
+            </label>
+            <button class="button" id="external-stop" type="button" data-text="stopProcess" hidden>Stop Process</button>
+          </div>
+        </div>
+        <div class="external-confirm" id="external-confirm" role="group" aria-labelledby="external-confirm-text" hidden>
+          <p id="external-confirm-text"></p>
+          <div class="actions">
+            <button class="button" id="external-cancel" type="button" data-text="cancel">Cancel</button>
+            <button class="button" id="external-confirm-stop" type="button" data-text="stop">Stop</button>
+          </div>
+        </div>
+        <pre class="terminal-output" id="external-log" aria-labelledby="external-log-heading" tabindex="0" data-empty></pre>
       </section>
     </div>
   </main>
@@ -738,6 +775,23 @@
         oneScript: "{value} script",
         scriptCount: "{value} scripts",
         activeProject: "Active scripts",
+        externalProcesses: "External Processes",
+        backToScripts: "Back to Scripts",
+        externalLogs: "External Logs",
+        externalSource: "Log file",
+        externalScan: "Scanning processes…",
+        noExternalProcesses: "No external processes found for this project.",
+        noExternalSelection: "Select a process to see its log.",
+        noExternalLogFile: "This process has no readable output file. Check the terminal or IDE that started it.",
+        externalUnavailable: "External processes could not be loaded.",
+        externalUnavailableMac: "External processes could not be loaded. If an older Script Manager window is running, exit and reopen it after scripts finish.",
+        externalLogFailed: "Could not read the output file.",
+        stopProcess: "Stop Process",
+        confirmExternalStop: "Stop {value}?",
+        confirmExternalStopWindows: "Terminate {value} immediately? Unsaved work may be lost.",
+        externalStopFailed: "Could not stop the process.",
+        externalStopRequested: "Stop requested for {value}.",
+        externalGone: "{value} is no longer detected.",
         logs: "Logs",
         scriptLogs: "Script logs",
         logTabs: "Script runs",
@@ -830,6 +884,23 @@
         oneScript: "{value} 个脚本",
         scriptCount: "{value} 个脚本",
         activeProject: "有脚本正在运行",
+        externalProcesses: "外部运行",
+        backToScripts: "返回脚本",
+        externalLogs: "外部日志",
+        externalSource: "日志文件",
+        externalScan: "正在扫描进程…",
+        noExternalProcesses: "此项目暂无外部运行的进程。",
+        noExternalSelection: "选择进程以查看日志。",
+        noExternalLogFile: "此进程没有可读的输出文件。请在启动它的终端或 IDE 中查看输出。",
+        externalUnavailable: "无法读取外部进程。",
+        externalUnavailableMac: "无法读取外部进程。如果浮窗仍是旧版，请等脚本运行完毕后退出并重新打开浮窗。",
+        externalLogFailed: "无法读取输出文件。",
+        stopProcess: "停止进程",
+        confirmExternalStop: "停止「{value}」？",
+        confirmExternalStopWindows: "立即终止「{value}」？未保存的数据可能丢失。",
+        externalStopFailed: "无法停止该进程。",
+        externalStopRequested: "已向「{value}」发送停止请求。",
+        externalGone: "已检测不到「{value}」。",
         logs: "日志",
         scriptLogs: "脚本日志",
         logTabs: "脚本运行记录",
@@ -901,6 +972,9 @@
       "welcome-title", "welcome-text", "dashboard", "counts", "project-count",
       "project-search", "project-list", "scope-info", "scope-controls", "command-config-error", "command-feedback", "script-search",
       "filters", "filter-all", "filter-active", "package-filter", "script-list", "scripts",
+      "script-toolbar", "managed-terminal", "external-processes", "external-refresh", "external-list", "external-status",
+      "external-error", "external-rows", "external-terminal", "external-source-group", "external-source", "external-stop",
+      "external-confirm", "external-confirm-text", "external-cancel", "external-confirm-stop", "external-log",
       "log", "log-tabs", "log-panel", "log-context", "log-title", "log-location", "log-status", "log-auto",
       "log-copy", "log-bottom", "copy-feedback", "log-fix", "project-path-form", "project-path-input",
       "project-path-submit", "project-path-cancel"
@@ -948,6 +1022,7 @@
     let lastLogId;
     let lastLogText;
     let lastLogErrors;
+    let externalView = null;
 
     function t(key, value) {
       return messages[locale][key].replace("{value}", () => String(value));
@@ -987,6 +1062,10 @@
       }
       ui["package-filter"].setAttribute("aria-label", t("packageFilter"));
       ui.filters.setAttribute("aria-label", t("filters"));
+      ui["external-rows"].setAttribute("aria-label", t("externalProcesses"));
+      ui["external-source"].setAttribute("aria-label", t("externalSource"));
+      ui["external-refresh"].setAttribute("aria-label", t("refreshStatus"));
+      ui["external-refresh"].title = t("refreshStatus");
       updateCopyFeedback("");
       render();
       schedule(0);
@@ -1331,6 +1410,7 @@
 
     function setProjectSelection(projectId) {
       if (projectId === state.projectId) return;
+      closeExternalView();
       state.projectId = projectId;
       state.packageFilter = "";
       state.menuProjectId = null;
@@ -2095,6 +2175,199 @@
       }
     }
 
+    function closeExternalView() {
+      clearTimeout(externalView?.timer);
+      externalView = null;
+    }
+
+    function externalProcess(view) {
+      return view.processes.find(({ id }) => id === view.processId);
+    }
+
+    function externalProcessLabel(process) {
+      return process.name + " · PID " + process.pid;
+    }
+
+    function externalWindows() {
+      return state.snapshot?.platform === "windows" || Boolean(browserSession);
+    }
+
+    async function externalRequest(view, operation, args, errorKey) {
+      const requestLocale = locale;
+      const response = await request("tools/call", {
+        name: toolPrefix + "_" + operation,
+        arguments: { projectId: view.projectId, ...args, locale: requestLocale }
+      });
+      const data = response?.structuredContent;
+      if (response?.isError || data?.schemaVersion !== 2) {
+        const detail = response?.isError ? response.content?.find(({ type }) => type === "text")?.text : "";
+        throw new LocalizedError(errorKey, detail, requestLocale);
+      }
+      return data;
+    }
+
+    function selectExternalSource(view, stream) {
+      const selection = { processId: view.processId, stream };
+      if (view.logSelection?.processId === selection.processId && view.logSelection.stream === stream) return;
+      view.logSelection = selection;
+      view.log = null;
+      view.logError = null;
+      renderExternal();
+      void readExternalLog(view);
+    }
+
+    function selectExternalProcess(view, processId) {
+      if (view.processId === processId) return;
+      view.processId = processId;
+      view.confirm = null;
+      view.stopError = null;
+      selectExternalSource(view, externalProcess(view)?.streams[0]?.id);
+    }
+
+    async function readExternalLog(view) {
+      const selection = view.logSelection;
+      if (!selection?.stream || selection.pending || document.hidden) return;
+      selection.pending = true;
+      try {
+        const { processId, stream } = selection;
+        const result = await externalRequest(view, "external_log", { processId, stream }, "externalLogFailed");
+        if (externalView !== view || view.logSelection !== selection) return;
+        if (typeof result.log !== "string") throw new LocalizedError("externalLogFailed");
+        view.log = result.log;
+        view.logError = null;
+      } catch (error) {
+        if (externalView !== view || view.logSelection !== selection) return;
+        view.logError = error;
+      } finally {
+        selection.pending = false;
+        if (externalView === view && view.logSelection === selection) renderExternal();
+      }
+    }
+
+    async function refreshExternal(view = externalView) {
+      if (!view || state.status !== "ready" || document.hidden || view.refreshing) return;
+      clearTimeout(view.timer);
+      view.refreshing = true;
+      renderExternal();
+      try {
+        const unavailable = externalWindows() ? "externalUnavailable" : "externalUnavailableMac";
+        const result = await externalRequest(view, "external_processes", {}, unavailable);
+        if (externalView !== view) return;
+        if (!Array.isArray(result.processes)) throw new LocalizedError(unavailable);
+        view.processes = result.processes;
+        view.error = null;
+        const selected = externalProcess(view);
+        if (view.stopNotice && !view.processes.some(({ id }) => id === view.stopNotice.id)) view.stopNotice.gone = true;
+        if (view.confirm && !selected?.canStop) view.confirm = null;
+        if (!selected) selectExternalProcess(view, view.processes[0]?.id ?? null);
+        else if (!selected.streams.some(({ id }) => id === view.logSelection?.stream)) {
+          selectExternalSource(view, selected.streams[0]?.id);
+        }
+        void readExternalLog(view);
+      } catch (error) {
+        if (externalView === view) view.error = error;
+      } finally {
+        if (externalView === view) {
+          view.refreshing = false;
+          view.loaded = true;
+          renderExternal();
+          if (!document.hidden) view.timer = setTimeout(() => refreshExternal(view), view.error ? 4500 : 2000);
+        }
+      }
+    }
+
+    async function stopExternalProcess() {
+      const view = externalView;
+      const process = view && externalProcess(view);
+      if (!process?.canStop || view.confirm !== process.id || view.stopping) return;
+      view.confirm = null;
+      view.stopping = true;
+      view.stopNotice = null;
+      view.stopError = null;
+      renderExternal();
+      ui["external-log"].focus();
+      try {
+        const result = await externalRequest(view, "stop_external", { processId: process.id }, "externalStopFailed");
+        if (result.stopping !== true) throw new LocalizedError("externalStopFailed");
+        view.stopNotice = { id: process.id, label: externalProcessLabel(process) };
+      } catch (error) {
+        if (view.processId === process.id) view.stopError = error;
+      } finally {
+        if (externalView === view) {
+          view.stopping = false;
+          renderExternal();
+          void refreshExternal(view);
+        }
+      }
+    }
+
+    function renderExternal() {
+      const view = externalView;
+      const entry = ui["external-processes"];
+      entry.hidden = entry.dataset.supported !== "true";
+      entry.disabled = state.status !== "ready" || !state.projectId;
+      setText(entry, t(view ? "backToScripts" : "externalProcesses"));
+      ui["script-toolbar"].toggleAttribute("data-external", Boolean(view));
+      ui["external-refresh"].hidden = !view;
+      ui["script-list"].hidden = Boolean(view);
+      ui["external-list"].hidden = !view;
+      ui["managed-terminal"].hidden = Boolean(view);
+      ui["external-terminal"].hidden = !view;
+      if (!view) return;
+
+      const selected = externalProcess(view);
+      const notice = view.stopNotice;
+      const error = view.stopError || view.error;
+      const feedback = (notice && t(notice.gone ? "externalGone" : "externalStopRequested", notice.label)) ||
+        (!view.loaded && !view.processes.length ? t("externalScan") :
+          !view.processes.length && !error ? t("noExternalProcesses") : "");
+      setText(ui["external-status"], feedback);
+      ui["external-status"].hidden = !feedback;
+      setText(ui["external-error"], error ? error.message : "");
+      ui["external-error"].hidden = !error;
+      ui["external-refresh"].disabled = Boolean(view.refreshing);
+
+      const list = ui["external-rows"];
+      const listSignature = JSON.stringify([view.processId, view.processes.map(({ id, name, pid, directory }) => [id, name, pid, directory])]);
+      if (view.listSignature !== listSignature) {
+        view.listSignature = listSignature;
+        const focus = focusedKey(list);
+        list.replaceChildren(...view.processes.map((process) => {
+          const row = node("li");
+          const choose = button("project-button external-row", "", ["external", process.id], () => selectExternalProcess(view, process.id));
+          choose.setAttribute("aria-pressed", String(process.id === view.processId));
+          choose.title = externalProcessLabel(process) + "\n" + process.directory;
+          choose.append(node("span", "truncate", externalProcessLabel(process)), node("span", "log-detail truncate", process.directory));
+          row.append(choose);
+          return row;
+        }));
+        if (focus) findFocus(list, focus)?.focus({ preventScroll: true });
+      }
+
+      const streams = selected?.streams ?? [];
+      const sources = ui["external-source"];
+      ui["external-source-group"].hidden = !streams.length;
+      const sourceSignature = JSON.stringify(streams);
+      if (view.sourceSignature !== sourceSignature) {
+        view.sourceSignature = sourceSignature;
+        sources.replaceChildren(...streams.map(({ id, label }) => new Option(label, id)));
+      }
+      if (streams.length) sources.value = view.logSelection?.stream ?? "";
+      ui["external-stop"].hidden = !selected?.canStop;
+      ui["external-stop"].disabled = Boolean(view.stopping || view.confirm);
+      ui["external-confirm"].hidden = view.confirm == null;
+      const confirmKey = externalWindows() ? "confirmExternalStopWindows" : "confirmExternalStop";
+      setText(ui["external-confirm-text"], view.confirm && selected ? t(confirmKey, externalProcessLabel(selected)) : "");
+
+      const output = ui["external-log"];
+      const atEnd = output.scrollHeight - output.scrollTop - output.clientHeight <= 8;
+      const content = view.logError?.message ?? (view.log || t(view.log !== null ? "noLogs"
+        : streams.length ? "loadingLogs" : selected ? "noExternalLogFile" : "noExternalSelection"));
+      output.toggleAttribute("data-empty", Boolean(view.logError || !view.log));
+      setText(output, content);
+      if (atEnd) output.scrollTop = output.scrollHeight;
+    }
+
     function render() {
       const data = state.snapshot;
       const picking = Boolean(data?.pickPending || state.action?.name === "choose");
@@ -2111,7 +2384,6 @@
       const floatingWindowLabel = t(state.floatingWindowPending ? "floatingWindowOpening" : "openFloatingWindow");
       floatingWindow.title = floatingWindowLabel;
       floatingWindow.setAttribute("aria-label", floatingWindowLabel);
-      setText(floatingWindow.lastElementChild, floatingWindowLabel);
       ui["add-project"].disabled = waiting;
       setText(ui["add-project"].lastElementChild, t(picking ? "waitingForFolder" : "openProject"));
       ui["project-path-submit"].disabled = waiting;
@@ -2124,6 +2396,7 @@
       const hasProjects = Boolean(data?.projects.length);
       ui["project-loading"].hidden = !loading;
       ui.dashboard.hidden = loading || !hasProjects;
+      renderExternal();
       ui.welcome.hidden = loading || hasProjects || Boolean(error && !data);
       if (hasProjects && !loading) {
         const { projects } = data;
@@ -2145,8 +2418,13 @@
     }
 
     function onVisibilityChange() {
-      if (document.hidden) clearTimeout(state.timer);
-      else schedule(0);
+      if (document.hidden) {
+        clearTimeout(state.timer);
+        clearTimeout(externalView?.timer);
+      } else {
+        schedule(0);
+        void refreshExternal();
+      }
     }
 
     function dispose() {
@@ -2154,6 +2432,7 @@
       state.status = "closed";
       clearTimeout(state.timer);
       clearTimeout(state.copyTimer);
+      closeExternalView();
       for (const pending of requests.values()) {
         clearTimeout(pending.timer);
         pending.reject(new LocalizedError("closed"));
@@ -2203,6 +2482,30 @@
     });
     ui["open-floating-window"].addEventListener("click", openFloatingWindow);
     ui.scan.addEventListener("click", () => queueAction("refresh"));
+    ui["external-processes"].addEventListener("click", () => {
+      if (externalView) closeExternalView();
+      else externalView = { projectId: state.projectId, processes: [], processId: null, log: null };
+      renderExternal();
+      void refreshExternal();
+    });
+    ui["external-refresh"].addEventListener("click", () => void refreshExternal());
+    ui["external-source"].addEventListener("change", (event) => {
+      if (externalView) selectExternalSource(externalView, event.target.value);
+    });
+    ui["external-stop"].addEventListener("click", () => {
+      const process = externalView && externalProcess(externalView);
+      if (!process?.canStop) return;
+      externalView.confirm = process.id;
+      renderExternal();
+      ui["external-cancel"].focus();
+    });
+    ui["external-cancel"].addEventListener("click", () => {
+      if (!externalView) return;
+      externalView.confirm = null;
+      renderExternal();
+      ui["external-stop"].focus();
+    });
+    ui["external-confirm-stop"].addEventListener("click", stopExternalProcess);
     ui["project-search"].addEventListener("input", () => {
       state.projectQuery = ui["project-search"].value;
       ui["project-list"].scrollTop = 0;
@@ -2246,7 +2549,10 @@
       if (!event.persisted) dispose();
     });
     window.addEventListener("pageshow", (event) => {
-      if (event.persisted) schedule(0);
+      if (event.persisted) {
+        schedule(0);
+        void refreshExternal();
+      }
     });
     browserTheme.addEventListener("change", applyTheme);
     const observer = new ResizeObserver(reportSize);
