@@ -135,12 +135,32 @@ final class ScriptManager: ObservableObject {
         return queue
     }()
     private let saveQueue = DispatchQueue(label: "codex-script-manager.save", qos: .userInitiated)
+    private let externalProcessQueue = DispatchQueue(label: "codex-script-manager.external-processes", qos: .utility)
     private var runs: [TaskKey: TaskRun] = [:]
     private var pendingScans: [String: UUID] = [:]
     private var onShutdown: (() -> Void)?
 
     var selectedProject: ManagedProject? { projects.first { $0.id == selectedProjectID } }
     var hasActiveJobs: Bool { !activeCount.isEmpty }
+
+    func inspectExternalProcesses<Value>(in projectID: String,
+                                         operation: @escaping (ExternalProcesses.Scope) throws -> Value,
+                                         completion: @escaping (Result<Value, Error>) -> Void) {
+        synchronizeProjects()
+        guard let project = projects.first(where: { $0.id == projectID && $0.isAvailable }) else {
+            completion(.failure(ExternalProcessService.Failure.projectUnavailable))
+            return
+        }
+        let scope = ExternalProcesses.Scope(
+            roots: project.roots.filter(\.isAvailable).map(\.id),
+            excludedRoots: projects.filter { $0.id != projectID }.flatMap { $0.roots.filter(\.isAvailable).map(\.id) },
+            managedGroups: Set(runs.values.compactMap { $0.process?.processGroupID })
+        )
+        externalProcessQueue.async {
+            let result = Result { try operation(scope) }
+            DispatchQueue.main.async { completion(result) }
+        }
+    }
 
     init(defaults: UserDefaults = .standard, projectCatalog: CodexProjectCatalog = CodexProjectCatalog()) {
         self.defaults = defaults

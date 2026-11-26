@@ -201,6 +201,57 @@ portable_bridge.serve(Path(sys.argv[3]))
 
 @unittest.skipUnless(sys.platform == "win32", "Requires native Windows cmd.exe and Job Objects")
 class NativeWindowsTests(unittest.TestCase):
+    def test_external_process_log_and_verified_stop(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            project, neighbor = root / "project with spaces", root / "project with spaces-other"
+            project.mkdir()
+            neighbor.mkdir()
+            runner = Runner(root / "codex")
+            children = []
+            try:
+                project_id = runner.call("add", {"path": str(project)})["selectedProjectId"]
+                command = [sys.executable, "-u", "-c", "import time; print('external fixture', flush=True); time.sleep(60)"]
+                with (project / "worker.log").open("ab", buffering=0) as output:
+                    for directory, destination in ((project, output), (neighbor, subprocess.DEVNULL)):
+                        children.append(subprocess.Popen(command, cwd=directory, stdout=destination,
+                                                         stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW))
+                    target, adjacent = children
+
+                    def call(method, **arguments):
+                        return runner.call(method, {"projectId": project_id, **arguments})
+
+                    def detected():
+                        rows = call("external_processes")["processes"]
+                        self.assertNotIn(adjacent.pid, {row["pid"] for row in rows})
+                        return next((row for row in rows if row["pid"] == target.pid and row["streams"]), None)
+
+                    process = wait_for(detected)
+                    self.assertTrue(process["canStop"])
+                    self.assertEqual(Path(process["directory"]), project)
+                    stream = process["streams"][0]
+                    self.assertEqual(stream["label"], "worker.log")
+
+                    def tail():
+                        return call("external_log", processId=process["id"], stream=stream["id"])["log"]
+
+                    wait_for(lambda: "external fixture" in tail())
+                    output.write(b"new file output\n")
+                    self.assertIn("new file output", tail())
+                    with self.assertRaises(PortableError):
+                        call("stop_external", processId=process["id"] + "0")
+                    self.assertIsNone(target.poll())
+                    self.assertTrue(call("stop_external", processId=process["id"])["stopping"])
+                    target.wait(timeout=5)
+                    self.assertIsNone(adjacent.poll())
+                    self.assertNotIn(target.pid, {row["pid"] for row in call("external_processes")["processes"]})
+            finally:
+                for child in children:
+                    if child.poll() is None:
+                        child.terminate()
+                        child.wait(timeout=5)
+                runner.close()
+
     def test_runs_a_multiline_powershell_action_and_stops_it_after_root_removal(self):
         with tempfile.TemporaryDirectory() as temporary:
             temp = Path(temporary).resolve()

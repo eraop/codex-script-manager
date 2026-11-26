@@ -10,6 +10,8 @@ final class ScriptManagerBridge {
         let destination: String?
         var rootPath: String? = nil
         var candidateId: String? = nil
+        var processId: String? = nil
+        var stream: String? = nil
     }
 
     enum Failure: LocalizedError {

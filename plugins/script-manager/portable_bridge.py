@@ -25,6 +25,10 @@ class ConnectionError(Exception):
     pass
 
 
+class UnsupportedTool(ConnectionError):
+    pass
+
+
 def runtime_directory():
     base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
     return base / "CodexScriptManager"
@@ -69,6 +73,8 @@ class Endpoint:
             payload = response.read(MAX_RESPONSE_SIZE + 1)
             if response.status == 200 and len(payload) <= MAX_RESPONSE_SIZE:
                 return json.loads(payload)
+            if response.status == 400 and path == "/tool":
+                raise UnsupportedTool("The local Script Manager runner rejected the tool.")
         except (OSError, HTTPException, ValueError):
             pass
         finally:

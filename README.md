@@ -63,7 +63,7 @@ On macOS, Codex shows the floating window shortcut in the sidebar layout with na
 
 To keep a project chat visible, open its right panel, choose **New tab (+)**, and select **Script Manager** from the plugin options. [Conversation panels](https://github.com/openai/mcp-extensions/blob/main/docs/spec.md#thread-entrypoint)
 
-On macOS, select **Open Floating Window** in the Script Manager header to bring the selected project into the native window. In a narrow panel, use the two-window icon. Select **Back to Codex** in the floating window's title bar to return to Codex while your scripts keep running.
+On macOS, click the two-window icon in the Script Manager header to bring the selected project into the native window. Hover to see **Open Floating Window**. Use the **Back to Codex** icon in the floating window's title bar to return to Codex while your scripts keep running.
 
 Script Manager lists local Codex projects and puts pinned projects first in their Codex order. Use **Open Project** to add another local folder. When a Codex project has multiple folders, its command list shows the primary folder first and the attached folders in Codex order. Each folder group starts expanded and can be collapsed independently. Search and filters cover the entire command list. Scripts in subpackages show their package names. Use the button at the start of a row to run or stop its script.
 
@@ -74,6 +74,14 @@ The logs panel shows the latest output for scripts across projects. Select a scr
 Script Manager highlights recognized error lines. For a failed run or recognized error, **AI Fix** opens a Codex draft in the script's project with a short diagnostic excerpt. Review and send the draft to ask Codex to fix missing dependencies or project setup and identify required environment variables.
 
 The sidebar follows the Codex interface language. The macOS window reads the Codex language when it opens and falls back to the system language. The Windows dashboard follows the browser language. Script output is displayed as written.
+
+### External processes
+
+On macOS and native Windows, select a project and open **External Processes** to see local processes running from that project's folders. Select a process to follow stdout or stderr redirected to a readable file. macOS also detects writable `.log` files that the process still has open. Script Manager displays up to the latest 64 KiB. Terminal output remains in the original terminal. For example, in a macOS shell or Windows Command Prompt, run `npm run dev >> dev.log 2>&1` to capture output in a file.
+
+Use the stop button and confirm the name and PID. Script Manager rechecks the process identity and project. macOS sends `SIGTERM` to request a graceful stop. Windows terminates the selected process immediately after confirmation.
+
+If the Windows runner is still from an earlier version, let managed scripts finish, restart Windows, and reopen Script Manager to load the update.
 
 ## Configure project commands
 

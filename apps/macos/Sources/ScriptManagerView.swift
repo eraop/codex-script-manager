@@ -112,6 +112,7 @@ private struct ActiveBadge: View {
 private struct ProjectView: View {
     @ObservedObject var manager: ScriptManager
     let project: ManagedProject
+    @State private var showExternalProcesses = false
 
     private var language: ScriptManagerLanguage { manager.language }
 
@@ -158,6 +159,9 @@ private struct ProjectView: View {
                 }
             }
         }
+        .sheet(isPresented: $showExternalProcesses) {
+            ExternalProcessView(manager: manager, projectID: project.id)
+        }
     }
 
     private var header: some View {
@@ -175,6 +179,12 @@ private struct ProjectView: View {
             if project.isScanning {
                 ProgressView().controlSize(.small).accessibilityLabel(language.text("Scanning scripts", "正在扫描脚本"))
             }
+            Button {
+                showExternalProcesses = true
+            } label: {
+                Label(language.text("External Processes", "外部运行"), systemImage: "list.bullet.rectangle")
+            }
+            .disabled(!project.isAvailable)
             Button {
                 manager.synchronizeProjects(force: true)
                 manager.refresh(project.id)
@@ -426,7 +436,7 @@ private struct TaskLogView: View {
     }
 }
 
-private struct LogTextView: NSViewRepresentable {
+struct LogTextView: NSViewRepresentable {
     let log: String
     let language: ScriptManagerLanguage
     private static let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)

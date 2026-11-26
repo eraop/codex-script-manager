@@ -409,6 +409,7 @@ enum ScriptCatalog {
 
 final class ScriptProcess {
     private let pid: pid_t
+    var processGroupID: pid_t { pid }
     private let output: Int32
     private let startupMarker: Data
     private let gradleDebugDirectory: URL?

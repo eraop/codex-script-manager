@@ -45,6 +45,11 @@ jobs:
         shell: pwsh
         run: ./scripts/package-plugin.ps1
 
+      - name: Test Windows external process handling
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python -B tests/test_portable_windows.py NativeWindowsTests.test_external_process_log_and_verified_stop
+
       - name: Publish ${{ matrix.branch }}
         shell: bash
         env:

@@ -119,11 +119,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func installBackToCodexButton(in panel: NSWindow) {
-        let button = NSButton(title: manager.language.backToCodexTitle, target: self, action: #selector(returnToCodex))
-        button.bezelStyle = .toolbar
-        button.controlSize = .small
+        let button = NSButton(title: "", target: self, action: #selector(returnToCodex))
+        button.image = NSImage(systemSymbolName: "arrow.uturn.backward", accessibilityDescription: nil)
+        button.symbolConfiguration = .init(pointSize: 14, weight: .medium)
+        button.imagePosition = .imageOnly
+        button.isBordered = false
+        localizeBackToCodexButton(button)
+
         let container = NSStackView(views: [button])
         container.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 8)
+        NSLayoutConstraint.activate([
+            button.widthAnchor.constraint(equalToConstant: 32),
+            button.heightAnchor.constraint(equalToConstant: 24),
+        ])
         container.setFrameSize(container.fittingSize)
 
         let accessory = NSTitlebarAccessoryViewController()
@@ -131,6 +139,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         accessory.layoutAttribute = .trailing
         panel.addTitlebarAccessoryViewController(accessory)
         backToCodexButton = button
+    }
+
+    private func localizeBackToCodexButton(_ button: NSButton) {
+        let title = manager.language.backToCodexTitle
+        button.toolTip = title
+        button.setAccessibilityLabel(title)
     }
 
     @objc private func returnToCodex() {
@@ -235,6 +249,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             reply(["ok": true])
             return
         }
+        if let operation = ExternalProcessService.Operation(request: request) {
+            let language = manager.language
+            guard let projectID = request.projectId else {
+                reply(ExternalProcessService.errorResponse(ExternalProcessService.Failure.projectUnavailable, in: language))
+                return
+            }
+            manager.inspectExternalProcesses(in: projectID, operation: operation.perform) { result in
+                switch result {
+                case .success(let data): reply(["ok": true, "data": data])
+                case .failure(let error): reply(ExternalProcessService.errorResponse(error, in: language))
+                }
+            }
+            return
+        }
         if request.method == "choose" {
             requestFolderPicker(useSheet: false)
         }
@@ -269,10 +297,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard manager.language != language else { return }
         manager.language = language
         window?.title = language.appTitle
-        if let button = backToCodexButton, let container = button.superview {
-            button.title = language.backToCodexTitle
-            container.setFrameSize(NSSize(width: container.fittingSize.width, height: container.frame.height))
-        }
+        if let button = backToCodexButton { localizeBackToCodexButton(button) }
         if let folderPicker { localize(folderPicker) }
         installMenu()
     }
