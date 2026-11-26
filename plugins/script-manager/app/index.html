@@ -522,6 +522,8 @@
       .masthead .button { padding-inline: 7px; }
       .masthead .actions { margin-inline-start: auto; }
       .masthead .counts { font-size: 12px; }
+      #open-floating-window { min-inline-size: 34px; }
+      #open-floating-window span { display: none; }
       .workspace { grid-template-columns: minmax(105px, .45fr) minmax(0, 1fr); }
       .panel-header h2 { font-size: 16px; }
       .project-panel { padding: 0 4px 4px; }
@@ -573,6 +575,7 @@
     <symbol id="i-refresh" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M320 146s24.36-12-64-12a160 160 0 1 0 160 160M256 58l80 80l-80 80"/></symbol>
     <symbol id="i-search" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M221.09 64a157.09 157.09 0 1 0 157.09 157.09A157.1 157.1 0 0 0 221.09 64zM338.29 338.29L448 448"/></symbol>
     <symbol id="i-stop" viewBox="0 0 512 512" fill="currentColor"><rect x="80" y="80" width="352" height="352" rx="32"/></symbol>
+    <symbol id="i-floating-window" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="14" height="14" rx="2"/><path d="M11 3h8a2 2 0 0 1 2 2v8"/></symbol>
   </svg>
   <main class="app" id="app">
     <header class="masthead">
@@ -582,6 +585,7 @@
         <p class="counts" id="counts"></p>
       </div>
       <div class="actions">
+        <button class="button" id="open-floating-window" type="button" data-supported="__SCRIPT_MANAGER_FLOATING_WINDOW__" hidden disabled><svg class="icon" aria-hidden="true"><use href="#i-floating-window"/></svg><span>Open Floating Window</span></button>
         <button class="button" id="scan" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span>Rescan</span></button>
         <button class="button primary" id="add-project" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#i-add"/></svg><span>Open Project</span></button>
       </div>
@@ -748,6 +752,9 @@
         aiFixFailed: "Could not open the Codex repair draft.",
         jumpToEnd: "Jump to end",
         autoScroll: "Auto-scroll",
+        openFloatingWindow: "Open Floating Window",
+        floatingWindowOpening: "Opening…",
+        floatingWindowFailed: "Could not open the Script Manager floating window.",
         openProject: "Open Project",
         folderPath: "Project folder",
         cancel: "Cancel",
@@ -837,6 +844,9 @@
         aiFixFailed: "无法打开 Codex 修复草稿。",
         jumpToEnd: "跳到末尾",
         autoScroll: "自动滚动",
+        openFloatingWindow: "打开浮窗",
+        floatingWindowOpening: "正在打开…",
+        floatingWindowFailed: "无法打开脚本管理浮窗。",
         openProject: "打开项目",
         folderPath: "项目文件夹",
         cancel: "取消",
@@ -887,7 +897,7 @@
       }
     };
     const ids = [
-      "app", "add-project", "scan", "error", "error-text", "retry", "project-loading", "welcome",
+      "app", "open-floating-window", "add-project", "scan", "error", "error-text", "retry", "project-loading", "welcome",
       "welcome-title", "welcome-text", "dashboard", "counts", "project-count",
       "project-search", "project-list", "scope-info", "scope-controls", "command-config-error", "command-feedback", "script-search",
       "filters", "filter-all", "filter-active", "package-filter", "script-list", "scripts",
@@ -920,6 +930,7 @@
       collapsedDirectories: new Set(),
       menuProjectId: null,
       copyTimer: 0,
+      floatingWindowPending: false,
       fixPending: false
     };
     let nextId = 0;
@@ -2036,6 +2047,30 @@
       state.copyTimer = setTimeout(() => updateCopyFeedback(""), 1600);
     }
 
+    async function openFloatingWindow() {
+      const button = ui["open-floating-window"];
+      if (button.hidden || button.disabled) return;
+      const project = state.snapshot?.projects.find(({ id, available }) => id === state.projectId && available !== false);
+      const requestLocale = locale;
+      const args = { locale: requestLocale };
+      if (project) args.projectId = project.id;
+      state.floatingWindowPending = true;
+      if (state.actionError?.key === "floatingWindowFailed") state.actionError = null;
+      render();
+      try {
+        const result = await request("tools/call", { name: toolPrefix + "_open_floating_window", arguments: args });
+        if (result?.isError || result?.structuredContent?.opened !== true) {
+          const detail = result?.isError ? result.content?.find((part) => part.type === "text")?.text : "";
+          throw new LocalizedError("floatingWindowFailed", detail, requestLocale);
+        }
+      } catch (error) {
+        if (state.status !== "closed") state.actionError = error;
+      } finally {
+        state.floatingWindowPending = false;
+        if (state.status !== "closed") render();
+      }
+    }
+
     async function openAiFix() {
       const selection = state.logSelection;
       if (!selection || ui["log-fix"].disabled) return;
@@ -2070,6 +2105,13 @@
       ui.error.hidden = !error;
       setText(ui.retry, t(state.status === "ready" ? "refreshStatus" : "reconnect"));
       ui.retry.disabled = Boolean(state.action) || state.status === "connecting";
+      const floatingWindow = ui["open-floating-window"];
+      floatingWindow.hidden = floatingWindow.dataset.supported !== "true";
+      floatingWindow.disabled = floatingWindow.hidden || waiting || state.floatingWindowPending;
+      const floatingWindowLabel = t(state.floatingWindowPending ? "floatingWindowOpening" : "openFloatingWindow");
+      floatingWindow.title = floatingWindowLabel;
+      floatingWindow.setAttribute("aria-label", floatingWindowLabel);
+      setText(floatingWindow.lastElementChild, floatingWindowLabel);
       ui["add-project"].disabled = waiting;
       setText(ui["add-project"].lastElementChild, t(picking ? "waitingForFolder" : "openProject"));
       ui["project-path-submit"].disabled = waiting;
@@ -2159,6 +2201,7 @@
       closeProjectPathForm();
       ui["add-project"].focus();
     });
+    ui["open-floating-window"].addEventListener("click", openFloatingWindow);
     ui.scan.addEventListener("click", () => queueAction("refresh"));
     ui["project-search"].addEventListener("input", () => {
       state.projectQuery = ui["project-search"].value;
