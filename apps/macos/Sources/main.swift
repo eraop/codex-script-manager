@@ -10,6 +10,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var handoffScheduled = false
     private var pendingURLs: [URL] = []
     private var window: NSWindow?
+    private var backToCodexButton: NSButton?
+    private var returnToCodexTask: Task<Void, Never>?
     private var folderPicker: NSOpenPanel?
     private var isPickingFolder = false
     private var hostLanguage: ScriptManagerLanguage?
@@ -86,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showWindow() {
+        returnToCodexTask?.cancel()
         manager.synchronizeProjects()
         if bridgeOnly {
             bridgeOnly = false
@@ -107,11 +110,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
             panel.center()
             panel.setFrameAutosaveName("ScriptManager")
+            installBackToCodexButton(in: panel)
             window = panel
         }
         window?.deminiaturize(nil)
         window?.makeKeyAndOrderFront(nil)
         activate()
+    }
+
+    private func installBackToCodexButton(in panel: NSWindow) {
+        let button = NSButton(title: manager.language.backToCodexTitle, target: self, action: #selector(returnToCodex))
+        button.bezelStyle = .toolbar
+        button.controlSize = .small
+        let container = NSStackView(views: [button])
+        container.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 8)
+        container.setFrameSize(container.fittingSize)
+
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.view = container
+        accessory.layoutAttribute = .trailing
+        panel.addTitlebarAccessoryViewController(accessory)
+        backToCodexButton = button
+    }
+
+    @objc private func returnToCodex() {
+        returnToCodexTask?.cancel()
+        guard let codex = NSRunningApplication.runningApplications(withBundleIdentifier: "com.openai.codex")
+            .first(where: { !$0.isTerminated }) else {
+            NSSound.beep()
+            return
+        }
+        if codex.isActive {
+            window?.orderOut(nil)
+            return
+        }
+
+        let requested: Bool
+        if #available(macOS 14.0, *) {
+            NSApp.yieldActivation(to: codex)
+            requested = codex.activate(from: .current)
+        } else {
+            requested = codex.activate(options: .activateIgnoringOtherApps)
+        }
+        guard requested else {
+            NSSound.beep()
+            return
+        }
+
+        // An allowed activation request may finish asynchronously or may never switch apps.
+        returnToCodexTask = Task { @MainActor [weak self] in
+            for _ in 0..<20 {
+                guard !Task.isCancelled else { return }
+                if codex.isActive {
+                    self?.window?.orderOut(nil)
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
     }
 
     private func activate() {
@@ -213,6 +269,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard manager.language != language else { return }
         manager.language = language
         window?.title = language.appTitle
+        if let button = backToCodexButton, let container = button.superview {
+            button.title = language.backToCodexTitle
+            container.setFrameSize(NSSize(width: container.fittingSize.width, height: container.frame.height))
+        }
         if let folderPicker { localize(folderPicker) }
         installMenu()
     }

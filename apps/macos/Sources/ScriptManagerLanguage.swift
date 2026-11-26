@@ -28,5 +28,6 @@ enum ScriptManagerLanguage {
     }
 
     var appTitle: String { text("Script Manager", "脚本管理") }
+    var backToCodexTitle: String { text("Back to Codex", "返回 Codex") }
     var openProjectTitle: String { text("Open Project Folder", "打开项目目录") }
 }

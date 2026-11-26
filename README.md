@@ -59,9 +59,11 @@ codex plugin add script-manager@codex-script-manager
 
 Open **Explore** in the Codex desktop sidebar, find **Script Manager**, and pin it. If a newly installed plugin does not appear, reopen Codex. [Local plugin installation](https://developers.openai.com/plugins/build/plugins#install-a-local-plugin-manually) · [Sidebar apps](https://developers.openai.com/plugins/build/extensions#sidebar-apps)
 
-On macOS, select the window icon beside the pinned Script Manager entry to bring its native window forward while keeping your chat open. The tooltip reads **打开浮窗** (Open floating window).
+On macOS, Codex shows the floating window shortcut in the sidebar layout with named app rows. Select the two-window icon at the right edge of the pinned **Script Manager** row. Hover over the icon to see **打开浮窗** (Open floating window). When Codex places app icons in the navigation rail, use the `script-manager` skill in your project chat to open the native window.
 
 To keep a project chat visible, open its right panel, choose **New tab (+)**, and select **Script Manager** from the plugin options. [Conversation panels](https://github.com/openai/mcp-extensions/blob/main/docs/spec.md#thread-entrypoint)
+
+On macOS, select **Open Floating Window** in the Script Manager header to bring the selected project into the native window. In a narrow panel, use the two-window icon. Select **Back to Codex** in the floating window's title bar to return to Codex while your scripts keep running.
 
 Script Manager lists local Codex projects and puts pinned projects first in their Codex order. Use **Open Project** to add another local folder. When a Codex project has multiple folders, its command list shows the primary folder first and the attached folders in Codex order. Each folder group starts expanded and can be collapsed independently. Search and filters cover the entire command list. Scripts in subpackages show their package names. Use the button at the start of a row to run or stop its script.
 
