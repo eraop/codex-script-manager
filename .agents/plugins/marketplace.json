@@ -1,0 +1,20 @@
+{
+  "name": "codex-script-manager",
+  "interface": {
+    "displayName": "Codex Script Manager"
+  },
+  "plugins": [
+    {
+      "name": "script-manager",
+      "source": {
+        "source": "local",
+        "path": "./plugins/script-manager"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

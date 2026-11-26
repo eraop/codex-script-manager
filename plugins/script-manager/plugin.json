@@ -1,0 +1,22 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "script-manager",
+  "version": "0.10.0",
+  "description": "Run local project commands and view logs in Codex.",
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true,
+      "interface": {
+        "displayName": "Script Manager",
+        "shortDescription": "Run scripts and view logs.",
+        "longDescription": "Find and run scripts across attached project folders, reuse Codex Actions, and save suggested commands on macOS or Windows.",
+        "developerName": "eraop",
+        "category": "Productivity",
+        "logo": "./assets/icon.svg",
+        "logoDark": "./assets/icon-dark.svg",
+        "composerIcon": "./assets/icon.svg",
+        "composerIconDark": "./assets/icon-dark.svg"
+      }
+    }
+  }
+}
