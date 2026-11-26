@@ -5,9 +5,10 @@ A local Codex plugin for running project commands and viewing logs on macOS and 
 | Entry point | Use |
 | --- | --- |
 | Sidebar | Open Script Manager in Codex to browse projects, run scripts, and view logs. |
+| Chat side panel | Open Script Manager beside a project chat to run scripts and follow logs while keeping the chat visible. |
 | Chat skill | Use the `script-manager` skill in a local project chat to open the current project or worktree in the macOS native window or the Windows browser dashboard. |
 
-The sidebar and chat skill share the same script runner within each environment. Closing the window, browser tab, or sidebar keeps scripts running. Reopen either view to see their status and latest logs. On macOS, quitting the native app stops the scripts it manages.
+All entry points share the same script runner within each environment. Closing a view keeps scripts running. Reopen Script Manager to see their status and latest logs. On macOS, quitting the native app stops the scripts it manages.
 
 ## Install the plugin
 
@@ -57,6 +58,8 @@ codex plugin add script-manager@codex-script-manager
 ### Open Script Manager
 
 Open **Explore** in the Codex desktop sidebar, find **Script Manager**, and pin it. If a newly installed plugin does not appear, reopen Codex. [Local plugin installation](https://developers.openai.com/plugins/build/plugins#install-a-local-plugin-manually) · [Sidebar apps](https://developers.openai.com/plugins/build/extensions#sidebar-apps)
+
+To keep a project chat visible, open its right panel, choose **New tab (+)**, and select **Script Manager** from the plugin options. [Conversation panels](https://github.com/openai/mcp-extensions/blob/main/docs/spec.md#thread-entrypoint)
 
 Script Manager lists local Codex projects and puts pinned projects first in their Codex order. Use **Open Project** to add another local folder. When a Codex project has multiple folders, its command list shows the primary folder first and the attached folders in Codex order. Each folder group starts expanded and can be collapsed independently. Search and filters cover the entire command list. Scripts in subpackages show their package names. Use the button at the start of a row to run or stop its script.
 

@@ -111,7 +111,7 @@ def tools():
         "icons": SIDEBAR_ICONS,
         "_meta": {
             "ui": {"resourceUri": RESOURCE_URI},
-            "openai/ui": {"entrypoints": [{"type": "global"}]},
+            "openai/ui": {"entrypoints": [{"type": "global"}, {"type": "thread"}]},
         },
     }
     for name, (description, properties, required) in OPERATIONS.items():
@@ -197,11 +197,8 @@ def bridge_connection():
                       "本地脚本管理未就绪。若已打开旧版浮窗，请退出后重试。")
 
 
-def require_picker_executable(client):
+def require_picker_executable(pid):
     # AppKit cannot open the picker once the running executable has been unlinked.
-    sol_local = getattr(socket, "SOL_LOCAL", 0)
-    local_peer_pid = getattr(socket, "LOCAL_PEERPID", 2)
-    pid = client.getsockopt(sol_local, local_peer_pid)
     executable = ctypes.create_string_buffer(4096)
     libproc = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
     if libproc.proc_pidpath(pid, executable, len(executable)) <= 0 and ctypes.get_errno() == errno.ENOENT:
@@ -219,8 +216,11 @@ def bridge_call(method, arguments):
         with bridge_connection() as client:
             if method == "add_command":
                 client.settimeout(15)
-            if method == "choose" and sys.platform == "darwin":
-                require_picker_executable(client)
+            pid = None
+            if sys.platform == "darwin":
+                pid = client.getsockopt(getattr(socket, "SOL_LOCAL", 0), getattr(socket, "LOCAL_PEERPID", 2))
+                if method == "choose":
+                    require_picker_executable(pid)
             client.sendall(request)
             with client.makefile("rb") as response:
                 payload = response.readline(MAX_RESPONSE_SIZE + 1)
@@ -234,8 +234,15 @@ def bridge_call(method, arguments):
         raise BridgeError("Could not read the Script Manager response.", "本地脚本管理返回了无法解析的数据。") from error
     if not isinstance(result, dict):
         raise BridgeError("Script Manager returned invalid data.", "本地脚本管理返回了无效的数据。")
-    if result.get("ok") is True and isinstance(result.get("data"), dict):
-        return result["data"]
+    data = result.get("data")
+    if result.get("ok") is True and isinstance(data, dict):
+        if pid is not None and data.get("pickPending"):
+            try:
+                require_picker_executable(pid)
+            except BridgeError as error:
+                data["pickPending"] = False
+                data["pickerError"] = error.localized(arguments.get("locale"))
+        return data
     message = result.get("error")
     if isinstance(message, str) and message:
         raise BridgeError(message)

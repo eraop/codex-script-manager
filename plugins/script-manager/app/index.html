@@ -2065,11 +2065,11 @@
       const picking = Boolean(data?.pickPending || state.action?.name === "choose");
       const waiting = picking || Boolean(state.action) || state.status !== "ready";
       const problem = state.actionError || state.transportError;
-      const error = problem ? problem.message || t("operationError") : "";
+      const error = problem ? problem.message || t("operationError") : data?.pickerError || "";
       setText(ui["error-text"], error);
       ui.error.hidden = !error;
       setText(ui.retry, t(state.status === "ready" ? "refreshStatus" : "reconnect"));
-      ui.retry.disabled = picking || Boolean(state.action) || state.status === "connecting";
+      ui.retry.disabled = Boolean(state.action) || state.status === "connecting";
       ui["add-project"].disabled = waiting;
       setText(ui["add-project"].lastElementChild, t(picking ? "waitingForFolder" : "openProject"));
       ui["project-path-submit"].disabled = waiting;
