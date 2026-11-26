@@ -22,6 +22,7 @@ SOCKET_DIR_ENV = "CODEX_SCRIPT_MANAGER_SOCKET_DIR"
 RESOURCE_URI = "ui://script-manager/index.html"
 RESOURCE_MIME = "text/html;profile=mcp-app"
 ENTRY_TOOL = "script_manager"
+OPEN_FLOATING_WINDOW_TOOL = f"{ENTRY_TOOL}_open_floating_window"
 MANIFEST = json.loads((PLUGIN_DIR / "plugin.json").read_text(encoding="utf-8"))
 INTERFACE = MANIFEST["extensions"]["com.openai"]["interface"]
 APP_TITLE = INTERFACE["displayName"]
@@ -37,16 +38,16 @@ ICON_ASSETS = {
 }
 
 
+def encode_icon(svg):
+    return {
+        "src": "data:image/svg+xml;base64," + base64.b64encode(svg).decode("ascii"),
+        "mimeType": "image/svg+xml",
+        "sizes": ["48x48"],
+    }
+
+
 def encode_icons(assets):
-    return [
-        {
-            "src": "data:image/svg+xml;base64," + base64.b64encode(svg).decode("ascii"),
-            "mimeType": "image/svg+xml",
-            "sizes": ["48x48"],
-            "theme": theme,
-        }
-        for theme, svg in assets.items()
-    ]
+    return [{**encode_icon(svg), "theme": theme} for theme, svg in assets.items()]
 
 
 BRAND_ICONS = encode_icons(ICON_ASSETS)
@@ -102,6 +103,13 @@ def object_schema(properties=(), required=()):
 
 
 def tools():
+    sidebar = {"type": "global"}
+    if sys.platform == "darwin":
+        sidebar["quickAction"] = {
+            "title": "打开浮窗",
+            "icons": [encode_icon((PLUGIN_DIR / "assets" / "floating-window.svg").read_bytes())],
+            "target": {"type": "tool", "name": OPEN_FLOATING_WINDOW_TOOL, "arguments": {}},
+        }
     yield {
         "name": ENTRY_TOOL,
         "title": APP_TITLE,
@@ -111,9 +119,17 @@ def tools():
         "icons": SIDEBAR_ICONS,
         "_meta": {
             "ui": {"resourceUri": RESOURCE_URI},
-            "openai/ui": {"entrypoints": [{"type": "global"}, {"type": "thread"}]},
+            "openai/ui": {"entrypoints": [sidebar, {"type": "thread"}]},
         },
     }
+    if sys.platform == "darwin":
+        yield {
+            "name": OPEN_FLOATING_WINDOW_TOOL,
+            "description": "Bring the macOS Script Manager floating window forward.",
+            "inputSchema": object_schema(),
+            "annotations": {"readOnlyHint": True, "openWorldHint": False},
+            "_meta": {"ui": {"visibility": ["app"]}},
+        }
     for name, (description, properties, required) in OPERATIONS.items():
         schema = object_schema(properties, required)
         schema["properties"]["locale"] = {"type": "string", "enum": ["en", "zh-CN"]}
@@ -234,6 +250,8 @@ def bridge_call(method, arguments):
         raise BridgeError("Could not read the Script Manager response.", "本地脚本管理返回了无法解析的数据。") from error
     if not isinstance(result, dict):
         raise BridgeError("Script Manager returned invalid data.", "本地脚本管理返回了无效的数据。")
+    if method == "revealNative" and result.get("ok") is True:
+        return {}
     data = result.get("data")
     if result.get("ok") is True and isinstance(data, dict):
         if pid is not None and data.get("pickPending"):
@@ -316,6 +334,14 @@ def call_tool(params, *, bridge=None):
         if arguments != {}:
             return tool_result(invalid_arguments, error=True)
         return tool_result(translate(locale, "Script Manager is open.", "脚本管理已打开。"))
+    if name == OPEN_FLOATING_WINDOW_TOOL and sys.platform == "darwin":
+        if arguments != {}:
+            return tool_result(invalid_arguments, error=True)
+        try:
+            (bridge or bridge_call)("revealNative", {})
+        except BridgeError as error:
+            return tool_result(error.localized(locale), error=True)
+        return tool_result(translate(locale, "Script Manager floating window opened.", "已打开脚本管理浮窗。"))
     operation = name.removeprefix(f"{ENTRY_TOOL}_")
     if operation == name or operation not in OPERATIONS:
         raise RpcError(-32602, "Unknown tool")
